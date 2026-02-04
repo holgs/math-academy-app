@@ -2,12 +2,13 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { AuthOptions } from 'next-auth';
 
 // Admin hardcoded
 const ADMIN_EMAIL = 'holger.ferrero@gmail.com';
 
-export const authOptions = {
-  adapter: PrismaAdapter(prisma),
+export const authOptions: AuthOptions = {
+  adapter: PrismaAdapter(prisma) as any,
   providers: [
     CredentialsProvider({
       name: 'credentials',
@@ -46,7 +47,7 @@ export const authOptions = {
           coins: user.coins,
           level: user.level,
           streak: user.streak,
-        };
+        } as any;
       },
     }),
   ],
