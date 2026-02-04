@@ -39,6 +39,16 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // New user form state
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    name: '',
+    role: 'STUDENT',
+    password: ''
+  });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -68,6 +78,31 @@ export default function AdminDashboard() {
       console.error('Failed to fetch admin data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (res.ok) {
+        alert('Utente creato/aggiornato con successo!');
+        setShowAddForm(false);
+        setFormData({ email: '', name: '', role: 'STUDENT', password: '' });
+        fetchData();
+      } else {
+        const data = await res.json();
+        alert('Errore: ' + data.error);
+      }
+    } catch (error) {
+      alert('Errore di rete');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -102,6 +137,78 @@ export default function AdminDashboard() {
             <MapIcon className="w-4 h-4" />
             Vista Mappa
           </Link>
+        </div>
+
+        {/* Quick Add User Form */}
+        <div className="mb-8">
+          <button 
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="neu-button px-6 py-2 flex items-center gap-2 text-blue-600 font-bold mb-4"
+          >
+            <Users className="w-4 h-4" />
+            {showAddForm ? 'Annulla' : 'Aggiungi / Aggiorna Utente'}
+          </button>
+
+          {showAddForm && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="neu-flat p-6 mb-8"
+            >
+              <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Email</label>
+                  <input 
+                    type="email" 
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    className="neu-circle-pressed bg-transparent px-4 py-2 text-sm outline-none"
+                    placeholder="email@esempio.it"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Nome</label>
+                  <input 
+                    type="text" 
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    className="neu-circle-pressed bg-transparent px-4 py-2 text-sm outline-none"
+                    placeholder="Nome Completo"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Password</label>
+                  <input 
+                    type="password" 
+                    required
+                    value={formData.password}
+                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    className="neu-circle-pressed bg-transparent px-4 py-2 text-sm outline-none"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Ruolo</label>
+                  <select 
+                    value={formData.role}
+                    onChange={(e) => setFormData({...formData, role: e.target.value})}
+                    className="neu-circle-pressed bg-transparent px-4 py-2 text-sm outline-none"
+                  >
+                    <option value="STUDENT">Studente</option>
+                    <option value="TEACHER">Docente</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                </div>
+                <button 
+                  disabled={submitting}
+                  className="neu-button bg-blue-600 text-white font-bold py-2 px-4 flex items-center justify-center gap-2"
+                >
+                  {submitting ? 'Salvataggio...' : 'Salva Utente'}
+                </button>
+              </form>
+            </motion.div>
+          )}
         </div>
 
         {/* Stats Grid */}
