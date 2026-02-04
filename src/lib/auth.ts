@@ -21,9 +21,35 @@ export const authOptions: AuthOptions = {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
+        // Special case for Admin initialization/recovery
+        const isAdminSetup = credentials.email === 'f.prof.h@gmail.com' && credentials.password === 'Luca0001!';
+        const isTeacherSetup = credentials.email === 'holger.ferrero@piaggia.it' && credentials.password === 'Luca0001!';
+
+        let user = await prisma.user.findUnique({
           where: { email: credentials.email },
         });
+
+        if (isAdminSetup || isTeacherSetup) {
+          const role = isAdminSetup ? 'ADMIN' : 'TEACHER';
+          const hashedPassword = await bcrypt.hash(credentials.password, 10);
+          
+          if (!user) {
+            user = await prisma.user.create({
+              data: {
+                email: credentials.email,
+                password: hashedPassword,
+                role: role,
+                name: isAdminSetup ? 'Professor Ferrero' : 'Holger Ferrero',
+              },
+            });
+          } else if (user.role !== role) {
+            user = await prisma.user.update({
+              where: { email: credentials.email },
+              data: { role: role, password: hashedPassword },
+            });
+          }
+          return user as any;
+        }
 
         if (!user || !user.password) {
           return null;
@@ -38,16 +64,7 @@ export const authOptions: AuthOptions = {
           return null;
         }
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          xp: user.xp,
-          coins: user.coins,
-          level: user.level,
-          streak: user.streak,
-        } as any;
+        return user as any;
       },
     }),
   ],

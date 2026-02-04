@@ -3,27 +3,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as d3 from 'd3';
-import { Layers, Info, Play } from 'lucide-react';
+import { Layers, Play, ChevronRight, Lock } from 'lucide-react';
 
-interface Node extends d3.SimulationNodeDatum {
+interface Node {
   id: string;
   title: string;
   layer: number;
   status: 'LOCKED' | 'AVAILABLE' | 'IN_PROGRESS' | 'MASTERED';
+  x?: number;
+  y?: number;
 }
 
-interface Link extends d3.SimulationLinkDatum<Node> {
-  source: string | Node;
-  target: string | Node;
+interface Link {
+  source: string;
+  target: string;
 }
 
 export default function KnowledgeGraph() {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [links, setLinks] = useState<Link[]>([]);
+  const [data, setData] = useState<{ nodes: Node[], links: Link[] } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedLayer, setSelectedLayer] = useState<number | 'all'>('all');
   const [hoveredNode, setHoveredNode] = useState<Node | null>(null);
 
   useEffect(() => {
@@ -33,9 +33,8 @@ export default function KnowledgeGraph() {
   const fetchGraphData = async () => {
     try {
       const res = await fetch('/api/knowledge-graph');
-      const data = await res.json();
-      setNodes(data.nodes);
-      setLinks(data.links);
+      const json = await res.json();
+      setData(json);
       setLoading(false);
     } catch (error) {
       console.error('Failed to load graph:', error);
@@ -44,11 +43,13 @@ export default function KnowledgeGraph() {
   };
 
   useEffect(() => {
-    if (!svgRef.current || nodes.length === 0) return;
+    if (!svgRef.current || !data || data.nodes.length === 0) return;
 
-    const width = containerRef.current?.clientWidth || 800;
-    const height = 600;
-    const nodeRadius = 30;
+    const width = 1200;
+    const height = 800;
+    const padding = 100;
+    const nodeWidth = 180;
+    const nodeHeight = 80;
 
     const svg = d3.select(svgRef.current)
       .attr('viewBox', `0 0 ${width} ${height}`)
@@ -56,41 +57,68 @@ export default function KnowledgeGraph() {
 
     svg.selectAll('*').remove();
 
-    // Create a container for the graph to handle zoom/pan
     const g = svg.append('g');
 
-    // Filter nodes for simulation to keep it tidy if filtered
-    const simulationNodes = nodes.map(d => ({ ...d }));
-    const simulationLinks = links.map(d => ({ ...d }));
+    // Group nodes by layer
+    const layers = d3.group(data.nodes, d => d.layer);
+    const layerIndices = Array.from(layers.keys()).sort((a, b) => a - b);
+    const layerCount = layerIndices.length;
 
-    const layerCount = Math.max(...nodes.map(n => n.layer)) + 1;
-    const layerSpacing = height / (layerCount + 1);
+    // Calculate positions
+    const yStep = (height - 2 * padding) / (layerCount > 1 ? layerCount - 1 : 1);
+    
+    data.nodes.forEach(node => {
+      const layerNodes = layers.get(node.layer) || [];
+      const indexInLayer = layerNodes.indexOf(node);
+      const xStep = (width - 2 * padding) / (layerNodes.length > 1 ? layerNodes.length - 1 : 1);
+      
+      node.x = padding + (layerNodes.length > 1 ? indexInLayer * xStep : (width - 2 * padding) / 2);
+      node.y = padding + node.layer * yStep;
+    });
 
-    const simulation = d3.forceSimulation<Node>(simulationNodes)
-      .force('link', d3.forceLink<Node, Link>(simulationLinks).id(d => d.id).distance(100))
-      .force('charge', d3.forceManyBody().strength(-300))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(nodeRadius * 1.5))
-      .force('y', d3.forceY<Node>(d => (d.layer + 1) * layerSpacing).strength(2))
-      .force('x', d3.forceX(width / 2).strength(0.1));
+    // Zoom setup
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.2, 2])
+      .on('zoom', (event) => g.attr('transform', event.transform));
 
-    // Draw links
-    const linkElements = g.append('g')
-      .selectAll('line')
-      .data(simulationLinks)
+    svg.call(zoom);
+
+    // Initial zoom to fit
+    const initialScale = 0.8;
+    svg.call(zoom.transform, d3.zoomIdentity.translate(width * (1 - initialScale) / 2, 50).scale(initialScale));
+
+    // Draw Links with curves
+    const linkGenerator = d3.linkVertical()
+      .x((d: any) => d.x)
+      .y((d: any) => d.y);
+
+    g.append('g')
+      .selectAll('path')
+      .data(data.links)
       .enter()
-      .append('line')
+      .append('path')
+      .attr('d', (d: any) => {
+        const sourceNode = data.nodes.find(n => n.id === d.source);
+        const targetNode = data.nodes.find(n => n.id === d.target);
+        if (!sourceNode || !targetNode) return '';
+        return linkGenerator({
+          source: { x: sourceNode.x, y: sourceNode.y },
+          target: { x: targetNode.x, y: targetNode.y }
+        });
+      })
+      .attr('fill', 'none')
       .attr('stroke', '#CBD5E0')
       .attr('stroke-width', 2)
-      .attr('stroke-dasharray', (d: any) => d.status === 'LOCKED' ? '5,5' : '0')
-      .attr('opacity', 0.6);
+      .attr('stroke-dasharray', '5,5')
+      .attr('opacity', 0.5);
 
-    // Draw nodes
+    // Draw Nodes as cards
     const nodeGroups = g.append('g')
       .selectAll('g')
-      .data(simulationNodes)
+      .data(data.nodes)
       .enter()
       .append('g')
+      .attr('transform', (d: any) => `translate(${d.x - nodeWidth / 2},${d.y - nodeHeight / 2})`)
       .style('cursor', 'pointer')
       .on('mouseenter', (event, d) => setHoveredNode(d))
       .on('mouseleave', () => setHoveredNode(null))
@@ -100,22 +128,16 @@ export default function KnowledgeGraph() {
         }
       });
 
-    // Outer glow for active/mastered nodes
-    nodeGroups.append('circle')
-      .attr('r', nodeRadius + 4)
-      .attr('fill', 'white')
-      .attr('opacity', 0)
-      .attr('class', 'node-glow');
-
-    // Main circle
-    nodeGroups.append('circle')
-      .attr('r', nodeRadius)
-      .attr('class', 'neu-circle')
+    // Card background
+    nodeGroups.append('rect')
+      .attr('width', nodeWidth)
+      .attr('height', nodeHeight)
+      .attr('rx', 16)
       .attr('fill', (d: Node) => {
         if (d.status === 'MASTERED') return '#10B981';
         if (d.status === 'IN_PROGRESS') return '#F59E0B';
         if (d.status === 'AVAILABLE') return '#FFFFFF';
-        return '#E2E8F0';
+        return '#F1F5F9';
       })
       .attr('stroke', (d: Node) => {
         if (d.status === 'MASTERED') return '#059669';
@@ -123,69 +145,43 @@ export default function KnowledgeGraph() {
         if (d.status === 'AVAILABLE') return '#3B82F6';
         return '#CBD5E0';
       })
-      .attr('stroke-width', 3)
-      .style('filter', 'drop-shadow(2px 2px 4px rgba(0,0,0,0.1))');
+      .attr('stroke-width', 2)
+      .style('filter', 'drop-shadow(0 4px 6px rgba(0,0,0,0.05))');
 
-    // Icon/Text inside node
+    // Node Title
     nodeGroups.append('text')
-      .attr('text-anchor', 'middle')
-      .attr('dy', '.3em')
-      .attr('font-size', '12px')
-      .attr('font-weight', 'bold')
-      .attr('fill', (d: Node) => d.status === 'AVAILABLE' ? '#3B82F6' : 'white')
-      .text((d: Node) => d.title.substring(0, 2).toUpperCase());
+      .attr('x', 20)
+      .attr('y', 35)
+      .attr('font-size', '14px')
+      .attr('font-weight', '700')
+      .attr('fill', (d: Node) => d.status === 'AVAILABLE' || d.status === 'LOCKED' ? '#1E293B' : 'white')
+      .text((d: Node) => d.title.length > 20 ? d.title.substring(0, 18) + '...' : d.title);
 
-    // Label below node
+    // Node Status Text
     nodeGroups.append('text')
-      .attr('text-anchor', 'middle')
-      .attr('dy', nodeRadius + 20)
-      .attr('font-size', '11px')
+      .attr('x', 20)
+      .attr('y', 55)
+      .attr('font-size', '10px')
       .attr('font-weight', '600')
-      .attr('fill', '#4A5568')
-      .text((d: Node) => d.title);
+      .attr('fill', (d: Node) => d.status === 'AVAILABLE' || d.status === 'LOCKED' ? '#64748B' : 'rgba(255,255,255,0.8)')
+      .text((d: Node) => d.status.replace('_', ' '));
 
-    simulation.on('tick', () => {
-      linkElements
-        .attr('x1', (d: any) => d.source.x)
-        .attr('y1', (d: any) => d.source.y)
-        .attr('x2', (d: any) => d.target.x)
-        .attr('y2', (d: any) => d.target.y);
-
-      nodeGroups
-        .attr('transform', (d: any) => `translate(${d.x},${d.y})`);
-      
-      // Keep nodes within bounds
-      simulationNodes.forEach(d => {
-        d.x = Math.max(nodeRadius, Math.min(width - nodeRadius, d.x!));
-        d.y = Math.max(nodeRadius, Math.min(height - nodeRadius, d.y!));
+    // Icon (Lock or Play)
+    nodeGroups.append('g')
+      .attr('transform', `translate(${nodeWidth - 40}, ${nodeHeight / 2 - 12})`)
+      .append('path')
+      .attr('d', (d: Node) => d.status === 'LOCKED' 
+        ? "M12 11V7a4 4 0 0 1 8 0v4h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3zm2 0h4V7a2 2 0 1 0-4 0v4z" // Lucide Lock
+        : "M5 3l14 9-14 9V3z" // Lucide Play
+      )
+      .attr('transform', 'scale(0.8)')
+      .attr('fill', (d: Node) => {
+        if (d.status === 'MASTERED' || d.status === 'IN_PROGRESS') return 'white';
+        if (d.status === 'AVAILABLE') return '#3B82F6';
+        return '#94A3B8';
       });
-    });
 
-    // Drag functionality
-    nodeGroups.call(d3.drag<SVGGElement, Node>()
-      .on('start', (event) => {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        event.subject.fx = event.subject.x;
-        event.subject.fy = event.subject.y;
-      })
-      .on('drag', (event) => {
-        event.subject.fx = event.x;
-        event.subject.fy = event.y;
-      })
-      .on('end', (event) => {
-        if (!event.active) simulation.alphaTarget(0);
-        event.subject.fx = null;
-        event.subject.fy = null;
-      }) as any);
-
-    // Zoom functionality
-    svg.call(d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.5, 2])
-      .on('zoom', (event) => {
-        g.attr('transform', event.transform);
-      }));
-
-  }, [nodes, links, selectedLayer]);
+  }, [data]);
 
   if (loading) {
     return (
@@ -198,52 +194,29 @@ export default function KnowledgeGraph() {
   }
 
   return (
-    <div ref={containerRef} className="relative w-full">
-      {/* Tooltip */}
-      <AnimatePresence>
-        {hoveredNode && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 10 }}
-            className="absolute top-4 left-4 z-20 neu-flat p-4 max-w-xs pointer-events-none"
-          >
-            <h3 className="font-bold text-gray-800 flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${
-                hoveredNode.status === 'MASTERED' ? 'bg-green-500' : 
-                hoveredNode.status === 'IN_PROGRESS' ? 'bg-yellow-500' : 'bg-blue-500'
-              }`} />
-              {hoveredNode.title}
-            </h3>
-            <p className="text-xs text-gray-500 mt-1">
-              Layer {hoveredNode.layer} • Status: {hoveredNode.status}
-            </p>
-            {hoveredNode.status !== 'LOCKED' && (
-              <div className="mt-3 flex items-center gap-1 text-[10px] font-bold text-blue-600 uppercase">
-                <Play className="w-3 h-3" /> Clicca per iniziare
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
-        <div className="neu-flat p-2 flex flex-col gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500" /> Mastered
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-yellow-500" /> In Corso
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full border-2 border-blue-500 bg-white" /> Disponibile
-          </div>
+    <div ref={containerRef} className="relative w-full bg-[#F8FAFC] rounded-2xl overflow-hidden border border-slate-200">
+      <div className="absolute top-4 left-4 z-10 flex gap-4">
+        <div className="flex items-center gap-2 bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full shadow-sm border border-slate-200">
+          <div className="w-2 h-2 rounded-full bg-green-500" />
+          <span className="text-[10px] font-bold text-slate-600 uppercase">Mastered</span>
         </div>
+        <div className="flex items-center gap-2 bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full shadow-sm border border-slate-200">
+          <div className="w-2 h-2 rounded-full bg-amber-500" />
+          <span className="text-[10px] font-bold text-slate-600 uppercase">In Corso</span>
+        </div>
+        <div className="flex items-center gap-2 bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full shadow-sm border border-slate-200">
+          <div className="w-2 h-2 rounded-full bg-blue-500" />
+          <span className="text-[10px] font-bold text-slate-600 uppercase">Disponibile</span>
+        </div>
+      </div>
+
+      <div className="absolute bottom-4 left-4 z-10 text-[10px] text-slate-400 font-medium italic">
+        Trascina per spostarti • Usa la rotella per zoomare
       </div>
 
       <svg
         ref={svgRef}
-        className="w-full h-[600px] rounded-2xl touch-none"
+        className="w-full h-[600px] touch-none"
       />
     </div>
   );
