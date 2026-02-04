@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import { AuthOptions } from 'next-auth';
 
 // Admin hardcoded
-const ADMIN_EMAIL = 'holger.ferrero@gmail.com';
+const ADMIN_EMAIL = 'f.prof.h@gmail.com';
 
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma) as any,

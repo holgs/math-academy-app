@@ -19,11 +19,20 @@ export default function Dashboard() {
   const { data: session } = useSession();
   const user = session?.user as { 
     name?: string | null;
+    role: 'STUDENT' | 'TEACHER' | 'ADMIN';
     xp: number;
     coins: number;
     level: number;
     streak: number;
   } | undefined;
+
+  const roleLabels = {
+    STUDENT: { label: 'Studente', color: 'bg-blue-100 text-blue-700' },
+    TEACHER: { label: 'Docente', color: 'bg-purple-100 text-purple-700' },
+    ADMIN: { label: 'Admin', color: 'bg-red-100 text-red-700' },
+  };
+
+  const currentRole = user?.role ? roleLabels[user.role] : { label: 'Studente', color: 'bg-blue-100 text-blue-700' };
 
   const stats = [
     { 
@@ -70,14 +79,28 @@ export default function Dashboard() {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
         >
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Ciao, {user?.name || 'Studente'}! 👋
-          </h1>
-          <p className="text-gray-600">
-            Pronto per la tua missione di oggi?
-          </p>
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-3xl font-bold text-gray-800">
+                Ciao, {user?.name || 'Studente'}! 👋
+              </h1>
+              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${currentRole.color}`}>
+                {currentRole.label}
+              </span>
+            </div>
+            <p className="text-gray-600">
+              Pronto per la tua missione di oggi?
+            </p>
+          </div>
+          
+          {user?.role === 'ADMIN' && (
+            <Link href="/admin" className="neu-button px-6 py-2 flex items-center gap-2 text-gray-700">
+              <Zap className="w-4 h-4 text-red-500" />
+              Pannello Admin
+            </Link>
+          )}
         </motion.div>
 
         {/* Stats Grid */}
@@ -141,27 +164,9 @@ export default function Dashboard() {
         >
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-800">Mappa della Conoscenza</h2>
-            <div className="flex gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-gray-400" />
-                <span className="text-gray-600">Bloccato</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-accent-success" />
-                <span className="text-gray-600">Disponibile</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-accent-warning" />
-                <span className="text-gray-600">In corso</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-accent-info" />
-                <span className="text-gray-600">Completato</span>
-              </div>
-            </div>
           </div>
           
-          <div className="neu-flat p-6">
+          <div className="neu-flat p-6 overflow-hidden">
             <KnowledgeGraph />
           </div>
         </motion.div>

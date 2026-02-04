@@ -1,30 +1,30 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import * as d3 from 'd3';
-import { Layers } from 'lucide-react';
+import { Layers, Info, Play } from 'lucide-react';
 
-interface Node {
+interface Node extends d3.SimulationNodeDatum {
   id: string;
   title: string;
   layer: number;
   status: 'LOCKED' | 'AVAILABLE' | 'IN_PROGRESS' | 'MASTERED';
-  x?: number;
-  y?: number;
 }
 
-interface Link {
+interface Link extends d3.SimulationLinkDatum<Node> {
   source: string | Node;
   target: string | Node;
 }
 
 export default function KnowledgeGraph() {
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedLayer, setSelectedLayer] = useState<number | 'all'>('all');
+  const [hoveredNode, setHoveredNode] = useState<Node | null>(null);
 
   useEffect(() => {
     fetchGraphData();
@@ -46,168 +46,205 @@ export default function KnowledgeGraph() {
   useEffect(() => {
     if (!svgRef.current || nodes.length === 0) return;
 
-    const svg = d3.select(svgRef.current);
+    const width = containerRef.current?.clientWidth || 800;
+    const height = 600;
+    const nodeRadius = 30;
+
+    const svg = d3.select(svgRef.current)
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet');
+
     svg.selectAll('*').remove();
 
-    const width = svgRef.current.clientWidth;
-    const height = 500;
+    // Create a container for the graph to handle zoom/pan
+    const g = svg.append('g');
 
-    // Filter nodes based on layer
-    const activeNodes = selectedLayer === 'all' 
-      ? nodes 
-      : nodes.filter(n => n.layer === selectedLayer);
-    
-    // Position calculation needs to consider all nodes to maintain structure,
-    // or we can just render only active ones. 
-    // Let's render all but change opacity for non-selected layers
-    
-    // Group nodes by layer
-    const layers = d3.group(nodes, d => d.layer);
+    // Filter nodes for simulation to keep it tidy if filtered
+    const simulationNodes = nodes.map(d => ({ ...d }));
+    const simulationLinks = links.map(d => ({ ...d }));
+
     const layerCount = Math.max(...nodes.map(n => n.layer)) + 1;
-    
-    // Position nodes in layers
-    const nodeRadius = 35;
-    const layerHeight = height / (layerCount + 1);
-    
-    nodes.forEach(node => {
-      const layerNodes = layers.get(node.layer) || [];
-      const index = layerNodes.indexOf(node);
-      const layerWidth = width - 100;
-      const spacing = layerNodes.length > 1 ? layerWidth / (layerNodes.length - 1) : 0;
-      
-      node.x = 50 + (layerNodes.length > 1 ? index * spacing : layerWidth / 2);
-      node.y = 50 + node.layer * layerHeight;
-    });
+    const layerSpacing = height / (layerCount + 1);
+
+    const simulation = d3.forceSimulation<Node>(simulationNodes)
+      .force('link', d3.forceLink<Node, Link>(simulationLinks).id(d => d.id).distance(100))
+      .force('charge', d3.forceManyBody().strength(-300))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide().radius(nodeRadius * 1.5))
+      .force('y', d3.forceY<Node>(d => (d.layer + 1) * layerSpacing).strength(2))
+      .force('x', d3.forceX(width / 2).strength(0.1));
 
     // Draw links
-    const linkElements = svg
-      .append('g')
+    const linkElements = g.append('g')
       .selectAll('line')
-      .data(links)
+      .data(simulationLinks)
       .enter()
       .append('line')
       .attr('stroke', '#CBD5E0')
       .attr('stroke-width', 2)
-      .attr('x1', (d: any) => (d.source as Node).x || 0)
-      .attr('y1', (d: any) => (d.source as Node).y || 0)
-      .attr('x2', (d: any) => (d.target as Node).x || 0)
-      .attr('y2', (d: any) => (d.target as Node).y || 0)
-      .attr('opacity', (d: any) => {
-        if (selectedLayer === 'all') return 1;
-        const sourceLayer = (d.source as Node).layer;
-        const targetLayer = (d.target as Node).layer;
-        return (sourceLayer === selectedLayer || targetLayer === selectedLayer) ? 1 : 0.1;
-      });
+      .attr('stroke-dasharray', (d: any) => d.status === 'LOCKED' ? '5,5' : '0')
+      .attr('opacity', 0.6);
 
     // Draw nodes
-    const nodeGroups = svg
-      .append('g')
+    const nodeGroups = g.append('g')
       .selectAll('g')
-      .data(nodes)
+      .data(simulationNodes)
       .enter()
       .append('g')
-      .attr('transform', (d: any) => `translate(${d.x},${d.y})`)
       .style('cursor', 'pointer')
-      .attr('opacity', (d: Node) => selectedLayer === 'all' || d.layer === selectedLayer ? 1 : 0.1);
-
-    // Node circles with neumorphism effect
-    nodeGroups
-      .append('circle')
-      .attr('r', nodeRadius)
-      .attr('fill', (d: Node) => {
-        switch (d.status) {
-          case 'MASTERED': return '#10B981';
-          case 'IN_PROGRESS': return '#F59E0B';
-          case 'AVAILABLE': return '#E0E5EC';
-          default: return '#A0AEC0';
+      .on('mouseenter', (event, d) => setHoveredNode(d))
+      .on('mouseleave', () => setHoveredNode(null))
+      .on('click', (event, d) => {
+        if (d.status !== 'LOCKED') {
+          window.location.href = `/learn/${d.id}`;
         }
+      });
+
+    // Outer glow for active/mastered nodes
+    nodeGroups.append('circle')
+      .attr('r', nodeRadius + 4)
+      .attr('fill', 'white')
+      .attr('opacity', 0)
+      .attr('class', 'node-glow');
+
+    // Main circle
+    nodeGroups.append('circle')
+      .attr('r', nodeRadius)
+      .attr('class', 'neu-circle')
+      .attr('fill', (d: Node) => {
+        if (d.status === 'MASTERED') return '#10B981';
+        if (d.status === 'IN_PROGRESS') return '#F59E0B';
+        if (d.status === 'AVAILABLE') return '#FFFFFF';
+        return '#E2E8F0';
       })
       .attr('stroke', (d: Node) => {
-        switch (d.status) {
-          case 'MASTERED': return '#059669';
-          case 'IN_PROGRESS': return '#D97706';
-          case 'AVAILABLE': return '#CBD5E0';
-          default: return '#718096';
-        }
+        if (d.status === 'MASTERED') return '#059669';
+        if (d.status === 'IN_PROGRESS') return '#D97706';
+        if (d.status === 'AVAILABLE') return '#3B82F6';
+        return '#CBD5E0';
       })
       .attr('stroke-width', 3)
-      .style('filter', (d: Node) => 
-        d.status === 'AVAILABLE' || d.status === 'IN_PROGRESS' 
-          ? 'drop-shadow(4px 4px 8px rgba(163, 177, 198, 0.6))' 
-          : 'none'
-      );
+      .style('filter', 'drop-shadow(2px 2px 4px rgba(0,0,0,0.1))');
 
-    // Node labels
-    nodeGroups
-      .append('text')
-      .text((d: Node) => d.title.substring(0, 10) + (d.title.length > 10 ? '...' : ''))
+    // Icon/Text inside node
+    nodeGroups.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '.3em')
+      .attr('font-size', '12px')
+      .attr('font-weight', 'bold')
+      .attr('fill', (d: Node) => d.status === 'AVAILABLE' ? '#3B82F6' : 'white')
+      .text((d: Node) => d.title.substring(0, 2).toUpperCase());
+
+    // Label below node
+    nodeGroups.append('text')
       .attr('text-anchor', 'middle')
       .attr('dy', nodeRadius + 20)
       .attr('font-size', '11px')
+      .attr('font-weight', '600')
       .attr('fill', '#4A5568')
-      .attr('font-weight', '500');
+      .text((d: Node) => d.title);
 
-    // Click handler
-    nodeGroups.on('click', (event: any, d: Node) => {
-      if (d.status !== 'LOCKED') {
-        window.location.href = `/learn/${d.id}`;
-      }
+    simulation.on('tick', () => {
+      linkElements
+        .attr('x1', (d: any) => d.source.x)
+        .attr('y1', (d: any) => d.source.y)
+        .attr('x2', (d: any) => d.target.x)
+        .attr('y2', (d: any) => d.target.y);
+
+      nodeGroups
+        .attr('transform', (d: any) => `translate(${d.x},${d.y})`);
+      
+      // Keep nodes within bounds
+      simulationNodes.forEach(d => {
+        d.x = Math.max(nodeRadius, Math.min(width - nodeRadius, d.x!));
+        d.y = Math.max(nodeRadius, Math.min(height - nodeRadius, d.y!));
+      });
     });
+
+    // Drag functionality
+    nodeGroups.call(d3.drag<SVGGElement, Node>()
+      .on('start', (event) => {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        event.subject.fx = event.subject.x;
+        event.subject.fy = event.subject.y;
+      })
+      .on('drag', (event) => {
+        event.subject.fx = event.x;
+        event.subject.fy = event.y;
+      })
+      .on('end', (event) => {
+        if (!event.active) simulation.alphaTarget(0);
+        event.subject.fx = null;
+        event.subject.fy = null;
+      }) as any);
+
+    // Zoom functionality
+    svg.call(d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.5, 2])
+      .on('zoom', (event) => {
+        g.attr('transform', event.transform);
+      }));
 
   }, [nodes, links, selectedLayer]);
 
   if (loading) {
     return (
-      <div className="h-[500px] flex items-center justify-center">
-        <div className="neu-convex p-6">
-          <div className="w-8 h-8 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+      <div className="h-[600px] flex items-center justify-center">
+        <div className="neu-convex p-6 text-blue-600">
+          <Layers className="w-8 h-8 animate-pulse" />
         </div>
       </div>
     );
   }
 
-  const maxLayer = nodes.length > 0 ? Math.max(...nodes.map(n => n.layer)) : 3;
-  const layers = Array.from({ length: maxLayer + 1 }, (_, i) => i);
-
   return (
-    <div className="relative">
-      {/* Layer Filters */}
-      <div className="absolute top-0 right-0 z-10 flex items-center gap-2 bg-[#E0E5EC]/80 backdrop-blur-sm p-2 rounded-xl border border-white/50 shadow-sm">
-        <Layers className="w-4 h-4 text-gray-500" />
-        <span className="text-xs font-medium text-gray-500 mr-1">Layer:</span>
-        <button
-          onClick={() => setSelectedLayer('all')}
-          className={`px-2 py-1 text-xs rounded-md transition-all ${
-            selectedLayer === 'all' 
-              ? 'bg-blue-500 text-white shadow-md' 
-              : 'text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          Tutti
-        </button>
-        {layers.map(layer => (
-          <button
-            key={layer}
-            onClick={() => setSelectedLayer(layer)}
-            className={`w-6 h-6 flex items-center justify-center text-xs rounded-md transition-all ${
-              selectedLayer === layer
-                ? 'bg-blue-500 text-white shadow-md'
-                : 'text-gray-600 hover:bg-gray-200'
-            }`}
+    <div ref={containerRef} className="relative w-full">
+      {/* Tooltip */}
+      <AnimatePresence>
+        {hoveredNode && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 10 }}
+            className="absolute top-4 left-4 z-20 neu-flat p-4 max-w-xs pointer-events-none"
           >
-            {layer}
-          </button>
-        ))}
+            <h3 className="font-bold text-gray-800 flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${
+                hoveredNode.status === 'MASTERED' ? 'bg-green-500' : 
+                hoveredNode.status === 'IN_PROGRESS' ? 'bg-yellow-500' : 'bg-blue-500'
+              }`} />
+              {hoveredNode.title}
+            </h3>
+            <p className="text-xs text-gray-500 mt-1">
+              Layer {hoveredNode.layer} • Status: {hoveredNode.status}
+            </p>
+            {hoveredNode.status !== 'LOCKED' && (
+              <div className="mt-3 flex items-center gap-1 text-[10px] font-bold text-blue-600 uppercase">
+                <Play className="w-3 h-3" /> Clicca per iniziare
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
+        <div className="neu-flat p-2 flex flex-col gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-green-500" /> Mastered
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-yellow-500" /> In Corso
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full border-2 border-blue-500 bg-white" /> Disponibile
+          </div>
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <svg
-          ref={svgRef}
-          width="100%"
-          height="500"
-          className="min-w-[800px]"
-        />
-      </div>
+      <svg
+        ref={svgRef}
+        className="w-full h-[600px] rounded-2xl touch-none"
+      />
     </div>
   );
 }
