@@ -87,11 +87,7 @@ export default function KnowledgeGraph() {
     const initialScale = 0.8;
     svg.call(zoom.transform, d3.zoomIdentity.translate(width * (1 - initialScale) / 2, 50).scale(initialScale));
 
-    // Draw Links with curves
-    const linkGenerator = d3.linkVertical()
-      .x((d: any) => d.x)
-      .y((d: any) => d.y);
-
+    // Draw Links with curves - using bezier curves manually
     g.append('g')
       .selectAll('path')
       .data(data.links)
@@ -101,10 +97,15 @@ export default function KnowledgeGraph() {
         const sourceNode = data.nodes.find(n => n.id === d.source);
         const targetNode = data.nodes.find(n => n.id === d.target);
         if (!sourceNode || !targetNode) return '';
-        return linkGenerator({
-          source: { x: sourceNode.x, y: sourceNode.y },
-          target: { x: targetNode.x, y: targetNode.y }
-        });
+        
+        // Simple cubic bezier curve
+        const sx = sourceNode.x!;
+        const sy = sourceNode.y!;
+        const tx = targetNode.x!;
+        const ty = targetNode.y!;
+        const midY = (sy + ty) / 2;
+        
+        return `M ${sx} ${sy} C ${sx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`;
       })
       .attr('fill', 'none')
       .attr('stroke', '#CBD5E0')
