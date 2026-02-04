@@ -2,6 +2,9 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { NextResponse } from 'next/server';
 
+// Admin hardcoded
+const ADMIN_EMAIL = 'holger.ferrero@gmail.com';
+
 export async function POST(req: Request) {
   try {
     const { name, email, password } = await req.json();
@@ -28,12 +31,16 @@ export async function POST(req: Request) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
+    // Determine role: admin hardcoded
+    const role = email.toLowerCase() === ADMIN_EMAIL ? 'ADMIN' : 'STUDENT';
+
     // Create user
     const user = await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
+        role,
         xp: 0,
         coins: 0,
         level: 1,

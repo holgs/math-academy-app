@@ -4,6 +4,7 @@ declare module 'next-auth' {
       id: string;
       email: string;
       name?: string | null;
+      role: 'STUDENT' | 'TEACHER' | 'ADMIN';
       xp: number;
       coins: number;
       level: number;
@@ -15,6 +16,7 @@ declare module 'next-auth' {
     id: string;
     email: string;
     name?: string | null;
+    role: 'STUDENT' | 'TEACHER' | 'ADMIN';
     xp: number;
     coins: number;
     level: number;
@@ -25,6 +27,7 @@ declare module 'next-auth' {
 declare module 'next-auth/jwt' {
   interface JWT {
     id: string;
+    role: 'STUDENT' | 'TEACHER' | 'ADMIN';
     xp: number;
     coins: number;
     level: number;

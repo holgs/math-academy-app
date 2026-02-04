@@ -3,6 +3,9 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
+// Admin hardcoded
+const ADMIN_EMAIL = 'holger.ferrero@gmail.com';
+
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -38,6 +41,7 @@ export const authOptions = {
           id: user.id,
           email: user.email,
           name: user.name,
+          role: user.role,
           xp: user.xp,
           coins: user.coins,
           level: user.level,
@@ -53,6 +57,7 @@ export const authOptions = {
     async jwt({ token, user }: { token: any; user: any }) {
       if (user) {
         token.id = user.id;
+        token.role = user.role;
         token.xp = user.xp;
         token.coins = user.coins;
         token.level = user.level;
@@ -63,6 +68,7 @@ export const authOptions = {
     async session({ session, token }: { session: any; token: any }) {
       if (token) {
         session.user.id = token.id as string;
+        session.user.role = token.role as string;
         session.user.xp = token.xp as number;
         session.user.coins = token.coins as number;
         session.user.level = token.level as number;

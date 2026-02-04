@@ -13,7 +13,11 @@ export default function DashboardPage() {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
     }
-  }, [status, router]);
+    // Admin redirect
+    if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
+      router.push('/admin');
+    }
+  }, [status, session, router]);
 
   if (status === 'loading') {
     return (
@@ -25,7 +29,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!session) {
+  if (!session || session.user?.role === 'ADMIN') {
     return null;
   }
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import * as d3 from 'd3';
+import { Layers } from 'lucide-react';
 
 interface Node {
   id: string;
@@ -23,6 +24,7 @@ export default function KnowledgeGraph() {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedLayer, setSelectedLayer] = useState<number | 'all'>('all');
 
   useEffect(() => {
     fetchGraphData();
@@ -50,6 +52,15 @@ export default function KnowledgeGraph() {
     const width = svgRef.current.clientWidth;
     const height = 500;
 
+    // Filter nodes based on layer
+    const activeNodes = selectedLayer === 'all' 
+      ? nodes 
+      : nodes.filter(n => n.layer === selectedLayer);
+    
+    // Position calculation needs to consider all nodes to maintain structure,
+    // or we can just render only active ones. 
+    // Let's render all but change opacity for non-selected layers
+    
     // Group nodes by layer
     const layers = d3.group(nodes, d => d.layer);
     const layerCount = Math.max(...nodes.map(n => n.layer)) + 1;
@@ -80,7 +91,13 @@ export default function KnowledgeGraph() {
       .attr('x1', (d: any) => (d.source as Node).x || 0)
       .attr('y1', (d: any) => (d.source as Node).y || 0)
       .attr('x2', (d: any) => (d.target as Node).x || 0)
-      .attr('y2', (d: any) => (d.target as Node).y || 0);
+      .attr('y2', (d: any) => (d.target as Node).y || 0)
+      .attr('opacity', (d: any) => {
+        if (selectedLayer === 'all') return 1;
+        const sourceLayer = (d.source as Node).layer;
+        const targetLayer = (d.target as Node).layer;
+        return (sourceLayer === selectedLayer || targetLayer === selectedLayer) ? 1 : 0.1;
+      });
 
     // Draw nodes
     const nodeGroups = svg
@@ -90,7 +107,8 @@ export default function KnowledgeGraph() {
       .enter()
       .append('g')
       .attr('transform', (d: any) => `translate(${d.x},${d.y})`)
-      .style('cursor', 'pointer');
+      .style('cursor', 'pointer')
+      .attr('opacity', (d: Node) => selectedLayer === 'all' || d.layer === selectedLayer ? 1 : 0.1);
 
     // Node circles with neumorphism effect
     nodeGroups
@@ -136,7 +154,7 @@ export default function KnowledgeGraph() {
       }
     });
 
-  }, [nodes, links]);
+  }, [nodes, links, selectedLayer]);
 
   if (loading) {
     return (
@@ -148,14 +166,48 @@ export default function KnowledgeGraph() {
     );
   }
 
+  const maxLayer = nodes.length > 0 ? Math.max(...nodes.map(n => n.layer)) : 3;
+  const layers = Array.from({ length: maxLayer + 1 }, (_, i) => i);
+
   return (
-    <div className="overflow-x-auto">
-      <svg
-        ref={svgRef}
-        width="100%"
-        height="500"
-        className="min-w-[800px]"
-      />
+    <div className="relative">
+      {/* Layer Filters */}
+      <div className="absolute top-0 right-0 z-10 flex items-center gap-2 bg-[#E0E5EC]/80 backdrop-blur-sm p-2 rounded-xl border border-white/50 shadow-sm">
+        <Layers className="w-4 h-4 text-gray-500" />
+        <span className="text-xs font-medium text-gray-500 mr-1">Layer:</span>
+        <button
+          onClick={() => setSelectedLayer('all')}
+          className={`px-2 py-1 text-xs rounded-md transition-all ${
+            selectedLayer === 'all' 
+              ? 'bg-blue-500 text-white shadow-md' 
+              : 'text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          Tutti
+        </button>
+        {layers.map(layer => (
+          <button
+            key={layer}
+            onClick={() => setSelectedLayer(layer)}
+            className={`w-6 h-6 flex items-center justify-center text-xs rounded-md transition-all ${
+              selectedLayer === layer
+                ? 'bg-blue-500 text-white shadow-md'
+                : 'text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {layer}
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-x-auto">
+        <svg
+          ref={svgRef}
+          width="100%"
+          height="500"
+          className="min-w-[800px]"
+        />
+      </div>
     </div>
   );
 }

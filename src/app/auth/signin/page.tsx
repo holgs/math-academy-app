@@ -29,7 +29,14 @@ export default function SignInPage() {
       setError('Email o password non validi');
       setLoading(false);
     } else {
-      router.push('/dashboard');
+      // Redirect based on role - fetch session to check
+      const res = await fetch('/api/auth/session');
+      const session = await res.json();
+      if (session?.user?.role === 'ADMIN') {
+        router.push('/admin');
+      } else {
+        router.push('/dashboard');
+      }
       router.refresh();
     }
   };
