@@ -31,6 +31,7 @@ export async function GET(req: Request) {
       },
     });
 
+    // Allow access if AVAILABLE, IN_PROGRESS, or MASTERED
     if (!progress || progress.status === 'LOCKED') {
       return NextResponse.json(
         { error: 'Knowledge point not available' },

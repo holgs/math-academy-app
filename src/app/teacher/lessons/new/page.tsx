@@ -1,0 +1,304 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { 
+  ArrowLeft, 
+  Wand2, 
+  BookOpen, 
+  Loader2,
+  CheckCircle,
+  AlertCircle
+} from 'lucide-react';
+import Link from 'next/link';
+
+interface KnowledgePoint {
+  id: string;
+  title: string;
+  layer: number;
+}
+
+export default function NewLessonPage() {
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  
+  // Form state
+  const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePoint[]>([]);
+  const [selectedKP, setSelectedKP] = useState('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [useAI, setUseAI] = useState(true);
+  const [slides, setSlides] = useState<any[]>([]);
+
+  // Fetch knowledge points on mount
+  useEffect(() => {
+    fetchKnowledgePoints();
+  }, []);
+
+  const fetchKnowledgePoints = async () => {
+    try {
+      const res = await fetch('/api/knowledge-graph');
+      if (res.ok) {
+        const data = await res.json();
+        setKnowledgePoints(data.nodes || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch KPs:', error);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!selectedKP) {
+      setError('Seleziona un argomento');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/teacher/lessons/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          knowledgePointId: selectedKP,
+          useAI,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setTitle(data.title);
+        setDescription(data.description);
+        setSlides(data.slides);
+        setStep(2);
+      } else {
+        const err = await res.json();
+        setError(err.error || 'Errore nella generazione');
+      }
+    } catch (error) {
+      setError('Errore di rete');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    
+    try {
+      const res = await fetch('/api/teacher/lessons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          description,
+          knowledgePointId: selectedKP,
+          slides,
+        }),
+      });
+
+      if (res.ok) {
+        router.push('/teacher/lessons');
+      } else {
+        const err = await res.json();
+        setError(err.error || 'Errore nel salvataggio');
+        setLoading(false);
+      }
+    } catch (error) {
+      setError('Errore di rete');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#E0E5EC]">
+      {/* Header */}
+      <header className="neu-flat m-4 p-4">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <Link href="/teacher/lessons" className="neu-button p-2 flex items-center gap-2 text-gray-600">
+            <ArrowLeft className="w-5 h-5" />
+            Indietro
+          </Link>
+          
+          <div className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-full ${step >= 1 ? 'bg-purple-600' : 'bg-gray-300'}`} />
+            <div className="w-8 h-0.5 bg-gray-300" />
+            <div className={`w-3 h-3 rounded-full ${step >= 2 ? 'bg-purple-600' : 'bg-gray-300'}`} />
+          </div>
+          
+          <div className="w-24" />
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto p-4">
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="neu-flat p-4 mb-6 bg-red-50 border-red-200"
+          >
+            <div className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="w-5 h-5" />
+              <span>{error}</span>
+            </div>
+          </motion.div>
+        )}
+
+        {step === 1 ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="neu-flat p-8"
+          >
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">Crea Nuova Lezione</h1>
+            <p className="text-gray-500 mb-8">Seleziona l'argomento e genera il contenuto</p>
+
+            <div className="space-y-6">
+              {/* Knowledge Point Selection */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Argomento
+                </label>
+                <select
+                  value={selectedKP}
+                  onChange={(e) => setSelectedKP(e.target.value)}
+                  className="neu-input w-full px-4 py-3"
+                >
+                  <option value="">Seleziona un argomento...</option>
+                  {knowledgePoints.map((kp) => (
+                    <option key={kp.id} value={kp.id}>
+                      Livello {kp.layer + 1}: {kp.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* AI Toggle */}
+              <div className="flex items-center gap-3 p-4 neu-convex rounded-xl">
+                <input
+                  type="checkbox"
+                  id="useAI"
+                  checked={useAI}
+                  onChange={(e) => setUseAI(e.target.checked)}
+                  className="w-5 h-5 accent-purple-600"
+                />
+                <label htmlFor="useAI" className="flex-1 cursor-pointer">
+                  <div className="flex items-center gap-2">
+                    <Wand2 className="w-5 h-5 text-purple-600" />
+                    <span className="font-semibold text-gray-800">Genera con AI</span>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    L'AI genererà automaticamente slide, esempi ed esercizi
+                  </p>
+                </label>
+              </div>
+
+              {/* Generate Button */}
+              <button
+                onClick={handleGenerate}
+                disabled={loading || !selectedKP}
+                className="neu-button w-full py-4 bg-purple-600 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Generazione in corso...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-5 h-5" />
+                    Genera Lezione
+                  </>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            {/* Preview Card */}
+            <div className="neu-flat p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+                <span className="text-green-600 font-semibold">Lezione generata!</span>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Titolo</label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="neu-input w-full px-4 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Descrizione</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={3}
+                    className="neu-input w-full px-4 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Slide ({slides.length})
+                  </label>
+                  <div className="space-y-2">
+                    {slides.map((slide, idx) => (
+                      <div key={idx} className="neu-convex p-3 flex items-center gap-3">
+                        <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold">
+                          {idx + 1}
+                        </span>
+                        <span className="flex-1 text-sm text-gray-700">{slide.title}</span>
+                        <span className="text-xs text-gray-400 capitalize">{slide.type}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-4">
+              <button
+                onClick={() => setStep(1)}
+                className="neu-button flex-1 py-3"
+              >
+                Indietro
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={loading}
+                className="neu-button flex-1 py-3 bg-purple-600 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Salvataggio...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    Salva Lezione
+                  </>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </main>
+    </div>
+  );
+}

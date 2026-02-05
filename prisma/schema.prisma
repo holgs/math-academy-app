@@ -54,6 +54,7 @@ model User {
   sessions      Session[]
   progress      UserProgress[]
   attempts      ExerciseAttempt[]
+  lessons       Lesson[]
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -84,6 +85,7 @@ model KnowledgePoint {
   
   exercises         Exercise[]
   progress          UserProgress[]
+  lessons           Lesson[]
   
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -138,4 +140,41 @@ enum ProgressStatus {
   AVAILABLE
   IN_PROGRESS
   MASTERED
+}
+
+model Lesson {
+  id               String   @id @default(cuid())
+  title            String
+  description      String
+  knowledgePointId String
+  teacherId        String
+  
+  knowledgePoint   KnowledgePoint @relation(fields: [knowledgePointId], references: [id], onDelete: Cascade)
+  teacher          User           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  slides           Slide[]
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Slide {
+  id        String   @id @default(cuid())
+  lessonId  String
+  type      SlideType @default(content)
+  title     String
+  content   String   @db.Text
+  order     Int      @default(0)
+  
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@index([lessonId, order])
+}
+
+enum SlideType {
+  content
+  example
+  exercise
+  summary
 }

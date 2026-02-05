@@ -10,7 +10,8 @@ import {
   Map as MapIcon, 
   LayoutDashboard,
   ChevronRight,
-  Search
+  Search,
+  Presentation
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
@@ -136,6 +137,10 @@ export default function AdminDashboard() {
           <Link href="/dashboard" className="neu-button px-6 py-2 flex items-center gap-2 text-gray-700">
             <MapIcon className="w-4 h-4" />
             Vista Mappa
+          </Link>
+          <Link href="/teacher/lessons" className="neu-button px-6 py-2 flex items-center gap-2 text-purple-600">
+            <Presentation className="w-4 h-4" />
+            Lezioni LIM
           </Link>
         </div>
 
