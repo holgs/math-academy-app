@@ -20,6 +20,12 @@ interface KnowledgePoint {
   layer: number;
 }
 
+interface DraftSlide {
+  type?: string;
+  title?: string;
+  content?: string;
+}
+
 export default function NewLessonPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -36,7 +42,7 @@ export default function NewLessonPage() {
   const [provider, setProvider] = useState<'openai' | 'google' | 'glm'>('openai');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
-  const [slides, setSlides] = useState<any[]>([]);
+  const [slides, setSlides] = useState<DraftSlide[]>([]);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -114,6 +120,23 @@ export default function NewLessonPage() {
     setLoading(true);
     
     try {
+      const normalizedSlides = (slides || []).map((slide, index) => {
+        const normalizedType = String(slide?.type || 'content').toLowerCase();
+        const validType =
+          normalizedType === 'content' ||
+          normalizedType === 'example' ||
+          normalizedType === 'exercise' ||
+          normalizedType === 'summary'
+            ? normalizedType
+            : 'content';
+
+        return {
+          type: validType,
+          title: String(slide?.title || `Slide ${index + 1}`),
+          content: String(slide?.content || ''),
+        };
+      });
+
       const res = await fetch('/api/teacher/lessons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -121,7 +144,7 @@ export default function NewLessonPage() {
           title,
           description,
           knowledgePointId: selectedKP,
-          slides,
+          slides: normalizedSlides,
         }),
       });
 
@@ -311,12 +334,25 @@ export default function NewLessonPage() {
                   </label>
                   <div className="space-y-2">
                     {slides.map((slide, idx) => (
-                      <div key={idx} className="neu-convex p-3 flex items-center gap-3">
-                        <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold">
-                          {idx + 1}
-                        </span>
-                        <span className="flex-1 text-sm text-gray-700">{slide.title}</span>
-                        <span className="text-xs text-gray-400 capitalize">{slide.type}</span>
+                      <div key={idx} className="neu-convex p-3 space-y-2">
+                        <div className="flex items-center gap-3">
+                          <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold">
+                            {idx + 1}
+                          </span>
+                          <span className="flex-1 text-sm text-gray-700">{slide.title}</span>
+                          <span className="text-xs text-gray-400 capitalize">{slide.type}</span>
+                        </div>
+                        <textarea
+                          value={slide.content || ''}
+                          onChange={(e) => {
+                            const next = [...slides];
+                            next[idx] = { ...next[idx], content: e.target.value };
+                            setSlides(next);
+                          }}
+                          rows={4}
+                          className="neu-input w-full px-3 py-2 text-sm"
+                          placeholder="Contenuto slide"
+                        />
                       </div>
                     ))}
                   </div>

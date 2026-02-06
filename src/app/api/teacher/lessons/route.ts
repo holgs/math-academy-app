@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
@@ -106,6 +107,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ lesson }, { status: 201 });
   } catch (error) {
     console.error('Error creating lesson:', error);
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      return NextResponse.json(
+        { error: `Failed to create lesson (${error.code})` },
+        { status: 500 }
+      );
+    }
+
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: `Failed to create lesson: ${error.message}` },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({ error: 'Failed to create lesson' }, { status: 500 });
   }
 }
