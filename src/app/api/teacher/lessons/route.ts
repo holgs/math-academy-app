@@ -109,6 +109,16 @@ export async function POST(req: Request) {
     console.error('Error creating lesson:', error);
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2021') {
+        return NextResponse.json(
+          {
+            error: 'Database non aggiornato: mancano le tabelle Lesson/Slide. Esegui le migrazioni Prisma e riprova.',
+            code: error.code,
+          },
+          { status: 500 }
+        );
+      }
+
       return NextResponse.json(
         { error: `Failed to create lesson (${error.code})` },
         { status: 500 }

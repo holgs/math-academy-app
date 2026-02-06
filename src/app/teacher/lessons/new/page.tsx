@@ -26,6 +26,12 @@ interface DraftSlide {
   content?: string;
 }
 
+function slidePreviewHtml(content: string) {
+  if (!content.trim()) return '<em>Nessun contenuto</em>';
+  if (content.includes('<')) return content;
+  return `<p>${content.replace(/\n/g, '<br />')}</p>`;
+}
+
 export default function NewLessonPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -152,7 +158,13 @@ export default function NewLessonPage() {
         router.push('/teacher/lessons');
       } else {
         const err = await res.json();
-        setError(err.error || 'Errore nel salvataggio');
+        if (err?.code === 'P2021') {
+          setError(
+            'Salvataggio fallito: database non aggiornato (tabella lezione mancante). Esegui `npm run db:migrate` e riprova.'
+          );
+        } else {
+          setError(err.error || 'Errore nel salvataggio');
+        }
         setLoading(false);
       }
     } catch (error) {
@@ -342,17 +354,28 @@ export default function NewLessonPage() {
                           <span className="flex-1 text-sm text-gray-700">{slide.title}</span>
                           <span className="text-xs text-gray-400 capitalize">{slide.type}</span>
                         </div>
-                        <textarea
-                          value={slide.content || ''}
-                          onChange={(e) => {
-                            const next = [...slides];
-                            next[idx] = { ...next[idx], content: e.target.value };
-                            setSlides(next);
-                          }}
-                          rows={4}
-                          className="neu-input w-full px-3 py-2 text-sm"
-                          placeholder="Contenuto slide"
-                        />
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          <textarea
+                            value={slide.content || ''}
+                            onChange={(e) => {
+                              const next = [...slides];
+                              next[idx] = { ...next[idx], content: e.target.value };
+                              setSlides(next);
+                            }}
+                            rows={6}
+                            className="neu-input w-full px-3 py-2 text-sm"
+                            placeholder="Contenuto slide"
+                          />
+                          <div className="neu-pressed p-3 rounded-xl min-h-[120px] overflow-auto">
+                            <p className="text-xs text-gray-500 mb-2">Anteprima</p>
+                            <div
+                              className="prose prose-sm max-w-none text-gray-700"
+                              dangerouslySetInnerHTML={{
+                                __html: slidePreviewHtml(String(slide.content || '')),
+                              }}
+                            />
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
