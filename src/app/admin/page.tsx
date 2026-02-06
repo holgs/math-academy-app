@@ -1,10 +1,11 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
+import { signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { GraduationCap, Plus, Save, Trash2, Search } from 'lucide-react';
+import { GraduationCap, LogOut, Plus, Save, Trash2, Search, ArrowLeft } from 'lucide-react';
 
 type Teacher = {
   id: string;
@@ -67,14 +68,15 @@ export default function AdminDashboard() {
     setError('');
     try {
       const [usersRes, statsRes] = await Promise.all([
-        fetch('/api/admin/users?role=TEACHER'),
+        fetch('/api/admin/users'),
         fetch('/api/admin/stats'),
       ]);
       const usersData = await usersRes.json();
       const statsData = await statsRes.json();
       if (!usersRes.ok) throw new Error(usersData.error || 'Errore caricamento docenti');
       if (!statsRes.ok) throw new Error(statsData.error || 'Errore caricamento statistiche');
-      setTeachers(usersData.users || []);
+      const allUsers = Array.isArray(usersData.users) ? usersData.users : [];
+      setTeachers(allUsers.filter((user: Teacher) => user.role === 'TEACHER'));
       setStats(statsData);
     } catch (err: any) {
       setError(err.message || 'Errore rete');
@@ -87,10 +89,18 @@ export default function AdminDashboard() {
     e.preventDefault();
     setError('');
     try {
+      const normalizedEmail = createForm.email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        throw new Error('Email non valida');
+      }
+      if (createForm.password.length < 8) {
+        throw new Error('Password minima: 8 caratteri');
+      }
+
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...createForm, role: 'TEACHER' }),
+        body: JSON.stringify({ ...createForm, email: normalizedEmail, role: 'TEACHER' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Errore creazione docente');
@@ -104,11 +114,19 @@ export default function AdminDashboard() {
   async function updateTeacher(id: string) {
     setError('');
     try {
+      const normalizedEmail = editForm.email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        throw new Error('Email non valida');
+      }
+      if (editForm.password.trim() && editForm.password.trim().length < 8) {
+        throw new Error('Password minima: 8 caratteri');
+      }
+
       const payload: Record<string, string> = {
         id,
         role: 'TEACHER',
         name: editForm.name,
-        email: editForm.email,
+        email: normalizedEmail,
       };
       if (editForm.password.trim()) {
         payload.password = editForm.password.trim();
@@ -159,12 +177,30 @@ export default function AdminDashboard() {
             <h1 className="text-2xl font-bold text-gray-800">Admin - Gestione Docenti</h1>
             <p className="text-sm text-gray-500">CRUD docenti + cambio password</p>
           </div>
-          <Link href="/teacher" className="neu-button px-4 py-2">
-            Vista docente
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard" className="neu-button px-3 py-2 flex items-center gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Dashboard
+            </Link>
+            <Link href="/teacher" className="neu-button px-3 py-2">
+              Vista docente
+            </Link>
+            <button
+              onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+              className="neu-button px-3 py-2 text-red-600 flex items-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </button>
+          </div>
         </div>
 
         {error && <div className="neu-flat p-3 text-sm text-red-600 bg-red-50">{error}</div>}
+        {teachers.length === 0 && (
+          <div className="neu-flat p-3 text-sm text-amber-700 bg-amber-50">
+            Nessun docente trovato. Nota: il docente hardcoded viene creato nel DB al suo primo login.
+          </div>
+        )}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="neu-flat p-3">
@@ -185,7 +221,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <form onSubmit={createTeacher} className="neu-flat p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <form noValidate onSubmit={createTeacher} className="neu-flat p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
           <input
             className="neu-input px-3 py-2"
             placeholder="Nome docente"
@@ -195,7 +231,7 @@ export default function AdminDashboard() {
           />
           <input
             className="neu-input px-3 py-2"
-            type="email"
+            type="text"
             placeholder="Email docente"
             value={createForm.email}
             onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
