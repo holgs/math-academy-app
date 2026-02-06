@@ -70,101 +70,10 @@ export async function GET() {
   }
 }
 
-// Award XP and coins for completing exercises
-export async function POST(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { xpEarned, coinsEarned, exerciseId }: {
-      xpEarned: number;
-      coinsEarned: number;
-      exerciseId: string;
-    } = await request.json();
-
-    // Get current user data
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { xp: true, level: true, coins: true, streak: true, lastActivity: true }
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    // Calculate new XP and check for level up
-    const newXp = user.xp + xpEarned;
-    const newCoins = user.coins + coinsEarned;
-    let newLevel = user.level;
-    let levelUp = false;
-
-    // Check if user leveled up
-    while (newXp >= XP_FOR_LEVEL(newLevel + 1)) {
-      newLevel++;
-      levelUp = true;
-    }
-
-    // Update streak
-    const now = new Date();
-    const lastActivity = user.lastActivity;
-    let newStreak = user.streak;
-    
-    if (lastActivity) {
-      const daysSinceLastActivity = Math.floor(
-        (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      
-      if (daysSinceLastActivity === 1) {
-        // Consecutive day
-        newStreak++;
-      } else if (daysSinceLastActivity > 1) {
-        // Streak broken, start new
-        newStreak = 1;
-      }
-      // If same day, don't change streak
-    } else {
-      newStreak = 1;
-    }
-
-    // Update user
-    const updatedUser = await prisma.user.update({
-      where: { id: session.user.id },
-      data: {
-        xp: newXp,
-        coins: newCoins,
-        level: newLevel,
-        streak: newStreak,
-        lastActivity: now,
-      }
-    });
-
-    // Record the attempt
-    await prisma.exerciseAttempt.create({
-      data: {
-        userId: session.user.id,
-        exerciseId,
-        answer: 'completed',
-        isCorrect: true,
-        xpEarned,
-        coinsEarned,
-      }
-    });
-
-    return NextResponse.json({
-      success: true,
-      xp: updatedUser.xp,
-      coins: updatedUser.coins,
-      level: updatedUser.level,
-      streak: updatedUser.streak,
-      levelUp,
-      xpEarned,
-      coinsEarned,
-    });
-  } catch (error) {
-    console.error('Error awarding XP:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
+// This endpoint previously accepted client-provided rewards and is intentionally disabled.
+export async function POST() {
+  return NextResponse.json(
+    { error: 'Use /api/exercises/submit to record attempts and rewards' },
+    { status: 410 }
+  );
 }

@@ -4,78 +4,57 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { GraduationCap, Plus, Save, Trash2, Search } from 'lucide-react';
+import { Users, Plus, Trash2, Save, KeyRound, Search } from 'lucide-react';
 
-type Teacher = {
+type Student = {
   id: string;
-  name: string | null;
+  name: string;
   email: string;
-  role: string;
-  createdAt: string;
-  _count: {
-    lessons: number;
-    attempts: number;
-    progress: number;
-  };
+  xp: number;
+  level: number;
+  streak: number;
+  masteryAvg: number;
+  masteredCount: number;
+  activeCount: number;
+  attemptsCount: number;
 };
 
-type Stats = {
-  totalUsers: number;
-  totalStudents: number;
-  totalXp: number;
-  masteredPoints: number;
-};
-
-export default function AdminDashboard() {
+export default function TeacherStudentsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [error, setError] = useState('');
 
-  const [createForm, setCreateForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-  });
-
+  const [newStudent, setNewStudent] = useState({ name: '', email: '', password: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-  });
+  const [editForm, setEditForm] = useState({ name: '', email: '', password: '' });
 
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/auth/signin');
       return;
     }
-    if (status === 'authenticated' && session?.user?.role !== 'ADMIN') {
+    if (status === 'authenticated' && session?.user?.role === 'STUDENT') {
       router.push('/dashboard');
       return;
     }
     if (status === 'authenticated') {
-      fetchData();
+      fetchStudents();
     }
   }, [status, session, router]);
 
-  async function fetchData() {
+  async function fetchStudents() {
     setLoading(true);
     setError('');
     try {
-      const [usersRes, statsRes] = await Promise.all([
-        fetch('/api/admin/users?role=TEACHER'),
-        fetch('/api/admin/stats'),
-      ]);
-      const usersData = await usersRes.json();
-      const statsData = await statsRes.json();
-      if (!usersRes.ok) throw new Error(usersData.error || 'Errore caricamento docenti');
-      if (!statsRes.ok) throw new Error(statsData.error || 'Errore caricamento statistiche');
-      setTeachers(usersData.users || []);
-      setStats(statsData);
+      const res = await fetch('/api/teacher/students');
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Errore caricamento studenti');
+      }
+      setStudents(data.students || []);
     } catch (err: any) {
       setError(err.message || 'Errore rete');
     } finally {
@@ -83,30 +62,31 @@ export default function AdminDashboard() {
     }
   }
 
-  async function createTeacher(e: React.FormEvent) {
+  async function createStudent(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await fetch('/api/teacher/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...createForm, role: 'TEACHER' }),
+        body: JSON.stringify(newStudent),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Errore creazione docente');
-      setCreateForm({ name: '', email: '', password: '' });
-      await fetchData();
+      if (!res.ok) {
+        throw new Error(data.error || 'Errore creazione studente');
+      }
+      setNewStudent({ name: '', email: '', password: '' });
+      await fetchStudents();
     } catch (err: any) {
       setError(err.message || 'Errore rete');
     }
   }
 
-  async function updateTeacher(id: string) {
+  async function updateStudent(id: string) {
     setError('');
     try {
       const payload: Record<string, string> = {
         id,
-        role: 'TEACHER',
         name: editForm.name,
         email: editForm.email,
       };
@@ -114,37 +94,41 @@ export default function AdminDashboard() {
         payload.password = editForm.password.trim();
       }
 
-      const res = await fetch('/api/admin/users', {
+      const res = await fetch('/api/teacher/students', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Errore aggiornamento docente');
+      if (!res.ok) {
+        throw new Error(data.error || 'Errore aggiornamento studente');
+      }
       setEditingId(null);
       setEditForm({ name: '', email: '', password: '' });
-      await fetchData();
+      await fetchStudents();
     } catch (err: any) {
       setError(err.message || 'Errore rete');
     }
   }
 
-  async function deleteTeacher(id: string) {
-    if (!confirm('Eliminare questo docente?')) return;
+  async function deleteStudent(id: string) {
+    if (!confirm('Eliminare questo studente?')) return;
     setError('');
     try {
-      const res = await fetch(`/api/admin/users?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/teacher/students?id=${id}`, { method: 'DELETE' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Errore eliminazione docente');
-      await fetchData();
+      if (!res.ok) {
+        throw new Error(data.error || 'Errore eliminazione studente');
+      }
+      await fetchStudents();
     } catch (err: any) {
       setError(err.message || 'Errore rete');
     }
   }
 
-  const filtered = teachers.filter((teacher) => {
+  const filtered = students.filter((student) => {
     const s = search.toLowerCase();
-    return (teacher.name || '').toLowerCase().includes(s) || teacher.email.toLowerCase().includes(s);
+    return student.name?.toLowerCase().includes(s) || student.email.toLowerCase().includes(s);
   });
 
   if (status === 'loading' || loading) {
@@ -153,100 +137,84 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[#E0E5EC] p-4">
-      <div className="max-w-7xl mx-auto space-y-4">
+      <div className="max-w-6xl mx-auto space-y-4">
         <div className="neu-flat p-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Admin - Gestione Docenti</h1>
-            <p className="text-sm text-gray-500">CRUD docenti + cambio password</p>
+            <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <Users className="w-5 h-5 text-purple-600" />
+              Gestione Studenti
+            </h1>
+            <p className="text-sm text-gray-500">CRUD studenti + statistiche</p>
           </div>
-          <Link href="/teacher" className="neu-button px-4 py-2">
-            Vista docente
+          <Link href="/teacher" className="neu-button px-4 py-2 text-gray-700">
+            Dashboard docente
           </Link>
         </div>
 
-        {error && <div className="neu-flat p-3 text-sm text-red-600 bg-red-50">{error}</div>}
+        {error && (
+          <div className="neu-flat p-3 text-sm text-red-600 bg-red-50">{error}</div>
+        )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="neu-flat p-3">
-            <p className="text-xs text-gray-500">Totale utenti</p>
-            <p className="text-xl font-bold">{stats?.totalUsers || 0}</p>
-          </div>
-          <div className="neu-flat p-3">
-            <p className="text-xs text-gray-500">Studenti</p>
-            <p className="text-xl font-bold">{stats?.totalStudents || 0}</p>
-          </div>
-          <div className="neu-flat p-3">
-            <p className="text-xs text-gray-500">XP totale</p>
-            <p className="text-xl font-bold">{stats?.totalXp || 0}</p>
-          </div>
-          <div className="neu-flat p-3">
-            <p className="text-xs text-gray-500">KP masterati</p>
-            <p className="text-xl font-bold">{stats?.masteredPoints || 0}</p>
-          </div>
-        </div>
-
-        <form onSubmit={createTeacher} className="neu-flat p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <form onSubmit={createStudent} className="neu-flat p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
           <input
             className="neu-input px-3 py-2"
-            placeholder="Nome docente"
-            value={createForm.name}
-            onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Nome studente"
+            value={newStudent.name}
+            onChange={(e) => setNewStudent(prev => ({ ...prev, name: e.target.value }))}
             required
           />
           <input
             className="neu-input px-3 py-2"
+            placeholder="Email"
             type="email"
-            placeholder="Email docente"
-            value={createForm.email}
-            onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
+            value={newStudent.email}
+            onChange={(e) => setNewStudent(prev => ({ ...prev, email: e.target.value }))}
             required
           />
           <input
             className="neu-input px-3 py-2"
-            type="password"
             placeholder="Password iniziale"
-            value={createForm.password}
-            onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
+            type="password"
+            value={newStudent.password}
+            onChange={(e) => setNewStudent(prev => ({ ...prev, password: e.target.value }))}
             required
           />
           <button className="neu-button bg-purple-600 text-white px-3 py-2 flex items-center justify-center gap-2">
             <Plus className="w-4 h-4" />
-            Crea docente
+            Crea studente
           </button>
         </form>
 
         <div className="neu-flat p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-gray-800 flex items-center gap-2">
-              <GraduationCap className="w-5 h-5 text-purple-600" />
-              Elenco docenti
-            </h2>
+            <div className="text-sm text-gray-600">Studenti: {filtered.length}</div>
             <div className="relative">
               <Search className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 className="neu-input pl-8 pr-3 py-2 text-sm"
-                placeholder="Cerca docente..."
+                placeholder="Cerca..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
           </div>
-
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-gray-200">
-                  <th className="py-2">Docente</th>
-                  <th className="py-2">Lezioni</th>
-                  <th className="py-2">Creato</th>
+                  <th className="py-2">Studente</th>
+                  <th className="py-2">Livello</th>
+                  <th className="py-2">XP</th>
+                  <th className="py-2">Mastery</th>
+                  <th className="py-2">Statistiche</th>
                   <th className="py-2 text-right">Azioni</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((teacher) => {
-                  const editing = editingId === teacher.id;
+                {filtered.map((student) => {
+                  const editing = editingId === student.id;
                   return (
-                    <tr key={teacher.id} className="border-b border-gray-100">
+                    <tr key={student.id} className="border-b border-gray-100">
                       <td className="py-3">
                         {editing ? (
                           <div className="space-y-2">
@@ -270,20 +238,24 @@ export default function AdminDashboard() {
                           </div>
                         ) : (
                           <>
-                            <div className="font-medium text-gray-800">{teacher.name || 'Docente'}</div>
-                            <div className="text-gray-500">{teacher.email}</div>
+                            <div className="font-medium text-gray-800">{student.name}</div>
+                            <div className="text-gray-500">{student.email}</div>
                           </>
                         )}
                       </td>
-                      <td className="py-3">{teacher._count.lessons}</td>
-                      <td className="py-3">{new Date(teacher.createdAt).toLocaleDateString('it-IT')}</td>
+                      <td className="py-3">{student.level}</td>
+                      <td className="py-3">{student.xp}</td>
+                      <td className="py-3">{Math.round(student.masteryAvg)}%</td>
+                      <td className="py-3 text-xs text-gray-600">
+                        Mastered: {student.masteredCount} | Attivi: {student.activeCount} | Tentativi: {student.attemptsCount}
+                      </td>
                       <td className="py-3">
                         <div className="flex items-center justify-end gap-2">
                           {editing ? (
                             <>
                               <button
                                 className="neu-button px-2 py-1 text-green-700 flex items-center gap-1"
-                                onClick={() => updateTeacher(teacher.id)}
+                                onClick={() => updateStudent(student.id)}
                               >
                                 <Save className="w-4 h-4" /> Salva
                               </button>
@@ -300,17 +272,17 @@ export default function AdminDashboard() {
                           ) : (
                             <>
                               <button
-                                className="neu-button px-2 py-1"
+                                className="neu-button px-2 py-1 flex items-center gap-1"
                                 onClick={() => {
-                                  setEditingId(teacher.id);
-                                  setEditForm({ name: teacher.name || '', email: teacher.email, password: '' });
+                                  setEditingId(student.id);
+                                  setEditForm({ name: student.name || '', email: student.email, password: '' });
                                 }}
                               >
-                                Modifica / password
+                                <KeyRound className="w-4 h-4" /> Modifica
                               </button>
                               <button
                                 className="neu-button px-2 py-1 text-red-600 flex items-center gap-1"
-                                onClick={() => deleteTeacher(teacher.id)}
+                                onClick={() => deleteStudent(student.id)}
                               >
                                 <Trash2 className="w-4 h-4" /> Elimina
                               </button>

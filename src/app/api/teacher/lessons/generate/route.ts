@@ -3,6 +3,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { llmService } from '@/lib/llm-service';
 import { NextResponse } from 'next/server';
+import { getRequestIp, rateLimit } from '@/lib/rate-limit';
 
 // POST /api/teacher/lessons/generate - Generate lesson content with AI
 export async function POST(req: Request) {
@@ -15,6 +16,15 @@ export async function POST(req: Request) {
 
     if (session.user.role !== 'TEACHER' && session.user.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const ip = getRequestIp(req);
+    const limit = rateLimit(`lesson-generate:${session.user.id}:${ip}`, 20, 60_000);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many generation requests' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(limit.retryAfterMs / 1000)) } }
+      );
     }
 
     const { knowledgePointId, useAI } = await req.json();

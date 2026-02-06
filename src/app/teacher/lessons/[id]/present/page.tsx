@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { sanitizeHtml } from '@/lib/sanitize-html';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -201,7 +202,7 @@ export default function PresentLesson() {
             {/* Slide Content */}
             <div 
               className="prose prose-invert prose-lg max-w-none"
-              dangerouslySetInnerHTML={{ __html: slide.content }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(slide.content) }}
             />
           </motion.div>
         </AnimatePresence>

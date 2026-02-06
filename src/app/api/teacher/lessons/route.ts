@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import { llmService } from '@/lib/llm-service';
+import { sanitizeHtml } from '@/lib/sanitize-html';
 
 // GET /api/teacher/lessons - List all lessons for the teacher
 export async function GET() {
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
           create: slides?.map((slide: any, index: number) => ({
             type: slide.type || 'content',
             title: slide.title || '',
-            content: slide.content || '',
+            content: sanitizeHtml(slide.content || ''),
             order: index,
           })) || [],
         },

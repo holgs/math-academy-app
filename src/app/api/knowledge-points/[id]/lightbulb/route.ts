@@ -1,12 +1,20 @@
 import { prisma } from '@/lib/prisma';
-import { llmService, TWELVE_PILLARS } from '@/lib/llm-service';
+import { llmService } from '@/lib/llm-service';
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { getRequestIp, rateLimit } from '@/lib/rate-limit';
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    const session = await getServerSession(authOptions) as { user: { id: string } } | null;
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = params;
 
     // Check if we have stored lightbulb data
@@ -56,6 +64,23 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const session = await getServerSession(authOptions) as { user: { id: string; role: string } } | null;
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (session.user.role !== 'TEACHER' && session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const ip = getRequestIp(request);
+    const limit = rateLimit(`lightbulb:${session.user.id}:${ip}`, 20, 60_000);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(limit.retryAfterMs / 1000)) } }
+      );
+    }
+
     const { id } = params;
     const { provider }: { provider: 'openai' | 'google' | 'glm' } = await request.json();
 

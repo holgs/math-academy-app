@@ -8,6 +8,7 @@ import {
   Presentation,
   Users,
   BookOpen,
+  PencilRuler,
   TrendingUp,
   Calendar,
   Clock,
@@ -229,6 +230,17 @@ export default function TeacherDashboard() {
                     <span className="font-medium">Crea Nuova Lezione</span>
                   </div>
                   <ChevronRight className="w-5 h-5" />
+                </Link>
+
+                <Link
+                  href="/teacher/exercises"
+                  className="neu-button w-full p-4 flex items-center justify-between hover:bg-emerald-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <PencilRuler className="w-5 h-5 text-emerald-600" />
+                    <span className="font-medium">Gestisci Esercizi</span>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400" />
                 </Link>
 
                 <Link

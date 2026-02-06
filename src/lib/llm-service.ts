@@ -85,14 +85,15 @@ class LLMService {
   async generateExercise(
     knowledgePoint: KnowledgePointContext, 
     provider: LLMProvider,
-    difficulty: 1 | 2 | 3 | 4 = 2
+    difficulty: 1 | 2 | 3 | 4 = 2,
+    forcedPillarId?: string
   ): Promise<ExerciseTemplate> {
     const config = this.configs.get(provider);
     if (!config) {
       throw new Error(`Provider ${provider} not configured`);
     }
 
-    const prompt = this.buildExercisePrompt(knowledgePoint, difficulty);
+    const prompt = this.buildExercisePrompt(knowledgePoint, difficulty, forcedPillarId);
 
     switch (provider) {
       case 'openai':
@@ -106,8 +107,11 @@ class LLMService {
     }
   }
 
-  private buildExercisePrompt(kp: KnowledgePointContext, difficulty: number): string {
+  private buildExercisePrompt(kp: KnowledgePointContext, difficulty: number, forcedPillarId?: string): string {
     const difficultyLabels = ['Base', 'Intermedio', 'Avanzato', 'Esperto'];
+    const forcedPillarInstruction = forcedPillarId
+      ? `\nPILASTRO OBBLIGATORIO: usa il pilastro con id "${forcedPillarId}" nel suggerimento e in pillarReference.`
+      : '';
     
     return `Genera un esercizio di matematica per il seguente concetto:
 
@@ -115,6 +119,7 @@ CONCETTO: ${kp.title}
 DESCRIZIONE: ${kp.description}
 LIVELLO: Layer ${kp.layer}
 DIFFICOLTÀ: ${difficultyLabels[difficulty - 1]} (${difficulty}/4)
+${forcedPillarInstruction}
 
 PREREQUISITI: ${kp.prerequisites.join(', ') || 'Nessuno'}
 
