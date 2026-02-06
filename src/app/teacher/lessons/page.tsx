@@ -46,11 +46,13 @@ export default function TeacherLessons() {
       router.push('/auth/signin');
     } else if (status === 'authenticated' && session?.user?.role === 'STUDENT') {
       router.push('/dashboard');
+    } else if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
+      router.push('/admin');
     }
   }, [status, session, router]);
 
   useEffect(() => {
-    if (status === 'authenticated' && (session?.user?.role === 'TEACHER' || session?.user?.role === 'ADMIN')) {
+    if (status === 'authenticated' && session?.user?.role === 'TEACHER') {
       fetchLessons();
     }
   }, [status, session]);

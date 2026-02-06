@@ -182,9 +182,6 @@ export default function AdminDashboard() {
               <ArrowLeft className="w-4 h-4" />
               Dashboard
             </Link>
-            <Link href="/teacher" className="neu-button px-3 py-2">
-              Vista docente
-            </Link>
             <button
               onClick={() => signOut({ callbackUrl: '/auth/signin' })}
               className="neu-button px-3 py-2 text-red-600 flex items-center gap-2"

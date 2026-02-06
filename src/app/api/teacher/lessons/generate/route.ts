@@ -27,10 +27,20 @@ export async function POST(req: Request) {
       );
     }
 
-    const { knowledgePointId, useAI } = await req.json();
+    const { knowledgePointId, useAI, provider, apiKey, model } = await req.json();
 
     if (!knowledgePointId) {
       return NextResponse.json({ error: 'Knowledge point ID required' }, { status: 400 });
+    }
+
+    if (useAI && typeof provider === 'string' && typeof apiKey === 'string' && apiKey.trim()) {
+      if (provider === 'openai' || provider === 'google' || provider === 'glm') {
+        llmService.setConfig({
+          provider,
+          apiKey: apiKey.trim(),
+          model: typeof model === 'string' && model.trim() ? model.trim() : undefined,
+        });
+      }
     }
 
     // Get knowledge point details

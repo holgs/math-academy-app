@@ -5,6 +5,19 @@ import { NextResponse } from 'next/server';
 import { llmService } from '@/lib/llm-service';
 import { sanitizeHtml } from '@/lib/sanitize-html';
 
+const VALID_SLIDE_TYPES = new Set(['content', 'example', 'exercise', 'summary']);
+
+function normalizeSlideType(type: unknown): 'content' | 'example' | 'exercise' | 'summary' {
+  if (typeof type !== 'string') {
+    return 'content';
+  }
+  const normalized = type.toLowerCase().trim();
+  if (VALID_SLIDE_TYPES.has(normalized)) {
+    return normalized as 'content' | 'example' | 'exercise' | 'summary';
+  }
+  return 'content';
+}
+
 // GET /api/teacher/lessons - List all lessons for the teacher
 export async function GET() {
   try {
@@ -58,19 +71,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    const kp = await prisma.knowledgePoint.findUnique({
+      where: { id: knowledgePointId },
+      select: { id: true },
+    });
+    if (!kp) {
+      return NextResponse.json({ error: 'Knowledge point not found' }, { status: 404 });
+    }
+
+    const preparedSlides = Array.isArray(slides)
+      ? slides.map((slide: any, index: number) => ({
+          type: normalizeSlideType(slide?.type),
+          title: String(slide?.title || `Slide ${index + 1}`).slice(0, 200),
+          content: sanitizeHtml(String(slide?.content || '')),
+          order: index,
+        }))
+      : [];
+
     const lesson = await prisma.lesson.create({
       data: {
-        title,
-        description: description || '',
+        title: String(title).slice(0, 200),
+        description: String(description || ''),
         knowledgePointId,
         teacherId: session.user.id,
         slides: {
-          create: slides?.map((slide: any, index: number) => ({
-            type: slide.type || 'content',
-            title: slide.title || '',
-            content: sanitizeHtml(slide.content || ''),
-            order: index,
-          })) || [],
+          create: preparedSlides,
         },
       },
       include: {
@@ -81,6 +106,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ lesson }, { status: 201 });
   } catch (error) {
     console.error('Error creating lesson:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create lesson' }, { status: 500 });
   }
 }

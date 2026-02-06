@@ -40,16 +40,28 @@ export async function POST(req: Request) {
       difficulty = 2,
       pillarId,
       useAI = true,
+      apiKey,
+      model,
     }: {
       knowledgePointId: string;
       provider?: LLMProvider;
       difficulty?: 1 | 2 | 3 | 4;
       pillarId?: string;
       useAI?: boolean;
+      apiKey?: string;
+      model?: string;
     } = await req.json();
 
     if (!knowledgePointId) {
       return NextResponse.json({ error: 'Knowledge point ID required' }, { status: 400 });
+    }
+
+    if (useAI && typeof apiKey === 'string' && apiKey.trim()) {
+      llmService.setConfig({
+        provider,
+        apiKey: apiKey.trim(),
+        model: typeof model === 'string' && model.trim() ? model.trim() : undefined,
+      });
     }
 
     const kp = await prisma.knowledgePoint.findUnique({

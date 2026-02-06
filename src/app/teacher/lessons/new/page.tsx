@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { motion } from 'framer-motion';
 import { 
   ArrowLeft, 
@@ -20,6 +21,7 @@ interface KnowledgePoint {
 }
 
 export default function NewLessonPage() {
+  const { data: session, status } = useSession();
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -31,12 +33,31 @@ export default function NewLessonPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [useAI, setUseAI] = useState(true);
+  const [provider, setProvider] = useState<'openai' | 'google' | 'glm'>('openai');
+  const [apiKey, setApiKey] = useState('');
+  const [model, setModel] = useState('');
   const [slides, setSlides] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/signin');
+      return;
+    }
+    if (status === 'authenticated' && session?.user?.role === 'STUDENT') {
+      router.push('/dashboard');
+      return;
+    }
+    if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
+      router.push('/admin');
+    }
+  }, [status, session, router]);
 
   // Fetch knowledge points on mount
   useEffect(() => {
-    fetchKnowledgePoints();
-  }, []);
+    if (status === 'authenticated' && session?.user?.role === 'TEACHER') {
+      fetchKnowledgePoints();
+    }
+  }, [status, session]);
 
   const fetchKnowledgePoints = async () => {
     try {
@@ -66,6 +87,9 @@ export default function NewLessonPage() {
         body: JSON.stringify({
           knowledgePointId: selectedKP,
           useAI,
+          provider,
+          apiKey: apiKey.trim() || undefined,
+          model: model.trim() || undefined,
         }),
       });
 
@@ -196,6 +220,36 @@ export default function NewLessonPage() {
                   </p>
                 </label>
               </div>
+
+              {useAI && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <select
+                      value={provider}
+                      onChange={(e) => setProvider(e.target.value as 'openai' | 'google' | 'glm')}
+                      className="neu-input w-full px-4 py-3"
+                    >
+                      <option value="openai">OpenAI</option>
+                      <option value="google">Google</option>
+                      <option value="glm">GLM</option>
+                    </select>
+                    <input
+                      type="text"
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      className="neu-input w-full px-4 py-3"
+                      placeholder="Model (opzionale)"
+                    />
+                  </div>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="neu-input w-full px-4 py-3"
+                    placeholder={`API key ${provider.toUpperCase()}`}
+                  />
+                </div>
+              )}
 
               {/* Generate Button */}
               <button

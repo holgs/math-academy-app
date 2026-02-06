@@ -40,6 +40,10 @@ export default function TeacherStudentsPage() {
       router.push('/dashboard');
       return;
     }
+    if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
+      router.push('/admin');
+      return;
+    }
     if (status === 'authenticated') {
       fetchStudents();
     }

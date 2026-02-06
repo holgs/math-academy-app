@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Bot, ChevronRight, Pencil, Plus, Save, Trash2, Wand2, X } from 'lucide-react';
+import { Bot, CheckCircle2, ChevronRight, Pencil, Plus, Save, Trash2, Wand2, X } from 'lucide-react';
 
 type KnowledgePoint = {
   id: string;
@@ -52,6 +52,8 @@ export default function TeacherExercisesPage() {
   });
 
   const [provider, setProvider] = useState<'openai' | 'google' | 'glm'>('openai');
+  const [apiKey, setApiKey] = useState('');
+  const [model, setModel] = useState('');
   const [useAI, setUseAI] = useState(true);
   const [selectedPillarId, setSelectedPillarId] = useState('');
   const [form, setForm] = useState({
@@ -70,10 +72,41 @@ export default function TeacherExercisesPage() {
       router.push('/dashboard');
       return;
     }
+    if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
+      router.push('/admin');
+      return;
+    }
     if (status === 'authenticated') {
       Promise.all([fetchLevel(), fetchPillars()]).finally(() => setLoading(false));
     }
   }, [status, session, router]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(`teacher_llm_${provider}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as { apiKey?: string; model?: string };
+        setApiKey(parsed.apiKey || '');
+        setModel(parsed.model || '');
+      } catch {
+        setApiKey('');
+        setModel('');
+      }
+    } else {
+      setApiKey('');
+      setModel('');
+    }
+  }, [provider]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      `teacher_llm_${provider}`,
+      JSON.stringify({
+        apiKey,
+        model,
+      })
+    );
+  }, [provider, apiKey, model]);
 
   useEffect(() => {
     if (selectedKpId) {
@@ -128,8 +161,6 @@ export default function TeacherExercisesPage() {
     setSelectedKpId(point.id);
     if (point.hasChildren) {
       fetchLevel(point.id);
-    } else {
-      setCurrentPoints([]);
     }
   }
 
@@ -158,6 +189,8 @@ export default function TeacherExercisesPage() {
           difficulty: form.difficulty,
           pillarId: selectedPillarId || undefined,
           useAI,
+          apiKey: apiKey.trim() || undefined,
+          model: model.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -293,7 +326,10 @@ export default function TeacherExercisesPage() {
               ))}
             </div>
             {selectedPathLabel && (
-              <p className="text-xs text-gray-500 mb-3">Selezionato: {selectedPathLabel}</p>
+              <p className="text-xs text-gray-500 mb-3 flex items-center gap-2">
+                <CheckCircle2 className="w-3 h-3 text-green-600" />
+                Selezionato: {selectedPathLabel}
+              </p>
             )}
             <div className="space-y-2 max-h-72 overflow-auto">
               {currentPoints.length === 0 && (
@@ -309,8 +345,8 @@ export default function TeacherExercisesPage() {
                     <div className="font-medium text-gray-800">{point.title}</div>
                     <div className="text-xs text-gray-500">Layer {point.layer + 1}</div>
                   </div>
-                  <div className="text-xs text-purple-600">
-                    {point.hasChildren ? 'Apri sotto-argomenti' : 'Seleziona'}
+                  <div className="text-xs text-purple-600 text-right">
+                    {selectedKpId === point.id ? 'Argomento attivo' : point.hasChildren ? 'Apri sotto-argomenti' : 'Seleziona'}
                   </div>
                 </button>
               ))}
@@ -340,6 +376,20 @@ export default function TeacherExercisesPage() {
                 <option value={4}>Difficoltà 4</option>
               </select>
             </div>
+
+            <input
+              className="neu-input px-3 py-2 w-full"
+              type="password"
+              placeholder={`API key ${provider.toUpperCase()}`}
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+            <input
+              className="neu-input px-3 py-2 w-full"
+              placeholder="Model (opzionale)"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+            />
 
             <label className="text-sm text-gray-600 flex items-center gap-2">
               <input
