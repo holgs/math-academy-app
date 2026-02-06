@@ -5,6 +5,15 @@ const nextConfig: NextConfig = {
   images: {
     domains: [],
   },
+  async redirects() {
+    return [
+      {
+        source: '/login',
+        destination: '/auth/signin',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

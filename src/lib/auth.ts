@@ -11,9 +11,10 @@ export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
   providers: [
     CredentialsProvider({
+      id: 'credentials',
       name: 'credentials',
       credentials: {
-        email: { label: 'Email', type: 'email' },
+        email: { label: 'Email', type: 'email', placeholder: 'email@example.com' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
