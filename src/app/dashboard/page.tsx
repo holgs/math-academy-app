@@ -17,6 +17,10 @@ export default function DashboardPage() {
     if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
       router.push('/admin');
     }
+    // Teacher redirect
+    if (status === 'authenticated' && session?.user?.role === 'TEACHER') {
+      router.push('/teacher');
+    }
   }, [status, session, router]);
 
   if (status === 'loading') {
@@ -29,7 +33,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!session || session.user?.role === 'ADMIN') {
+  if (!session || session.user?.role === 'ADMIN' || session.user?.role === 'TEACHER') {
     return null;
   }
 

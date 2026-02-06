@@ -34,6 +34,8 @@ export default function SignInPage() {
       const session = await res.json();
       if (session?.user?.role === 'ADMIN') {
         router.push('/admin');
+      } else if (session?.user?.role === 'TEACHER') {
+        router.push('/teacher');
       } else {
         router.push('/dashboard');
       }
