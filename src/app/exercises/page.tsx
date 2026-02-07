@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import KatexContent from '@/components/KatexContent';
 
 interface Exercise {
   id: string;
@@ -259,7 +260,10 @@ export default function ExercisePage() {
           </div>
 
           <div className="neu-pressed p-6 mb-6">
-            <p className="text-lg text-gray-800 leading-relaxed">{currentExercise.question}</p>
+            <KatexContent
+              className="text-lg text-gray-800 leading-relaxed"
+              content={currentExercise.question}
+            />
           </div>
 
           <div className="space-y-4">
@@ -285,7 +289,7 @@ export default function ExercisePage() {
                 >
                   <div className="flex items-start gap-3">
                     <Lightbulb className="w-5 h-5 text-accent-warning flex-shrink-0 mt-0.5" />
-                    <p className="text-gray-700">{currentExercise.hint}</p>
+                    <KatexContent className="text-gray-700" content={currentExercise.hint} />
                   </div>
                 </motion.div>
               )}
@@ -314,7 +318,10 @@ export default function ExercisePage() {
 
                   {!result.isCorrect && (
                     <p className="text-gray-700 mb-4">
-                      Risposta corretta: <strong className="text-accent-success">{result.correctAnswer}</strong>
+                      Risposta corretta:{' '}
+                      <span className="font-semibold text-accent-success inline-block align-middle">
+                        <KatexContent content={result.correctAnswer} inline />
+                      </span>
                     </p>
                   )}
 

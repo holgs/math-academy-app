@@ -64,6 +64,42 @@ export default function TeacherExercisesPage() {
   });
   const [verifyingLlm, setVerifyingLlm] = useState(false);
   const [verifyResult, setVerifyResult] = useState<{ ok: boolean; elapsedMs?: number; error?: string } | null>(null);
+  const [importJson, setImportJson] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    theory: number;
+    tips: number;
+    examples: number;
+    exercises: number;
+  } | null>(null);
+
+  const jsonSchemaExample = `{
+  "theory": [
+    "Definizione in LaTeX: $a^2+b^2=c^2$",
+    "Secondo blocco teorico..."
+  ],
+  "tips": [
+    "Suggerimento 1",
+    "Suggerimento 2"
+  ],
+  "examples": [
+    { "title": "Esempio guidato", "content": "Passo 1 ... $$x=\\\\frac{-b\\\\pm\\\\sqrt{b^2-4ac}}{2a}$$" }
+  ],
+  "exercises": [
+    {
+      "question": "Risolvi: $x^2-5x+6=0$",
+      "answer": "x=2 oppure x=3",
+      "hint": "Usa la fattorizzazione",
+      "difficulty": 2
+    }
+  ]
+}`;
+
+  const generationPromptTemplate = `Genera un JSON valido con chiavi theory, tips, examples, exercises.
+Regole:
+1) usa formule in delimitatori KaTeX ($...$ o $$...$$)
+2) exercises deve includere question, answer, hint, difficulty (1-4)
+3) output solo JSON, nessun testo extra`;
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -238,6 +274,39 @@ export default function TeacherExercisesPage() {
       setError(err.message || 'Errore rete');
     } finally {
       setVerifyingLlm(false);
+    }
+  }
+
+  async function importJsonBundle() {
+    if (!selectedKpId) {
+      setError('Seleziona prima un argomento');
+      return;
+    }
+    if (!importJson.trim()) {
+      setError('Inserisci JSON da importare');
+      return;
+    }
+
+    setImporting(true);
+    setError('');
+    setImportResult(null);
+    try {
+      const res = await fetch('/api/teacher/exercises/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          knowledgePointId: selectedKpId,
+          payload: importJson,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Errore import JSON');
+      setImportResult(data.imported || null);
+      await fetchExercises(selectedKpId);
+    } catch (err: any) {
+      setError(err.message || 'Errore rete');
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -590,6 +659,48 @@ export default function TeacherExercisesPage() {
             ))}
             {exercises.length === 0 && (
               <p className="text-sm text-gray-500">Nessun esercizio per questo argomento.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid lg:grid-cols-2 gap-4">
+          <div className="neu-flat p-4 space-y-3">
+            <h2 className="font-bold text-gray-800">Schema JSON per import</h2>
+            <textarea
+              className="neu-input w-full px-3 py-2 min-h-64 font-mono text-xs"
+              value={jsonSchemaExample}
+              readOnly
+            />
+            <p className="text-xs text-gray-500">
+              Le formule possono essere scritte in KaTeX con delimitatori `$...$` o `$$...$$`.
+            </p>
+          </div>
+
+          <div className="neu-flat p-4 space-y-3">
+            <h2 className="font-bold text-gray-800">Prompt e importazione JSON</h2>
+            <textarea
+              className="neu-input w-full px-3 py-2 min-h-24 text-xs"
+              value={generationPromptTemplate}
+              readOnly
+            />
+            <textarea
+              className="neu-input w-full px-3 py-2 min-h-64 font-mono text-xs"
+              placeholder="Incolla qui il JSON generato dall'LLM"
+              value={importJson}
+              onChange={(e) => setImportJson(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={importJsonBundle}
+              disabled={importing || !selectedKpId}
+              className="neu-button w-full px-3 py-2 bg-indigo-600 text-white disabled:opacity-50"
+            >
+              {importing ? 'Import in corso...' : 'Importa JSON in argomento selezionato'}
+            </button>
+            {importResult && (
+              <div className="text-xs bg-green-50 text-green-700 p-2 rounded">
+                Import completato: teoria {importResult.theory}, tips {importResult.tips}, esempi {importResult.examples}, esercizi {importResult.exercises}
+              </div>
             )}
           </div>
         </div>

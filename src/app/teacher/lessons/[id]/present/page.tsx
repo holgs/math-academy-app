@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sanitizeHtml } from '@/lib/sanitize-html';
+import KatexContent from '@/components/KatexContent';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -275,9 +276,10 @@ export default function PresentLesson() {
             <h2 className="text-4xl md:text-5xl font-bold mb-8">{slide.title}</h2>
 
             {/* Slide Content */}
-            <div 
+            <KatexContent
               className="prose prose-invert prose-lg max-w-none"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(slide.content) }}
+              content={sanitizeHtml(slide.content)}
+              isHtml
             />
           </motion.div>
         </AnimatePresence>

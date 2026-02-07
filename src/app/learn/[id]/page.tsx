@@ -17,6 +17,7 @@ import {
   Calculator
 } from 'lucide-react';
 import Link from 'next/link';
+import KatexContent from '@/components/KatexContent';
 
 interface KnowledgePoint {
   id: string;
@@ -26,6 +27,9 @@ interface KnowledgePoint {
   prerequisites: string[];
   status: 'LOCKED' | 'AVAILABLE' | 'IN_PROGRESS' | 'MASTERED';
   masteryLevel: number;
+  importedTheory?: string[];
+  importedTips?: string[];
+  importedExamples?: Array<{ title?: string; content?: string }>;
 }
 
 interface Exercise {
@@ -181,6 +185,11 @@ export default function LearnPage() {
     );
   }
 
+  const mergedTips = [
+    ...(Array.isArray(kp.importedTips) ? kp.importedTips.map((t) => String(t)) : []),
+    ...(lightbulb?.tips || []),
+  ];
+
   return (
     <div className="min-h-screen bg-[#E0E5EC]">
       {/* Header */}
@@ -213,7 +222,7 @@ export default function LearnPage() {
             </div>
             <div className="flex-1">
               <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">{kp.title}</h1>
-              <p className="text-gray-600 mb-4">{kp.description}</p>
+              <KatexContent className="text-gray-600 mb-4" content={kp.description} />
               
               {kp.status !== 'MASTERED' && (
                 <div className="flex items-center gap-4">
@@ -271,9 +280,27 @@ export default function LearnPage() {
                   Teoria
                 </h3>
                 <div className="prose prose-gray max-w-none">
-                  <p className="text-gray-600 leading-relaxed">
-                    {kp.description}. Questo argomento fa parte del livello {kp.layer + 1} del percorso di apprendimento.
-                  </p>
+                  <KatexContent
+                    className="text-gray-600 leading-relaxed"
+                    content={`${kp.description}. Questo argomento fa parte del livello ${kp.layer + 1} del percorso di apprendimento.`}
+                  />
+                  {Array.isArray(kp.importedTheory) && kp.importedTheory.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {kp.importedTheory.map((block, idx) => (
+                        <KatexContent key={`th-${idx}`} className="text-gray-700" content={String(block)} />
+                      ))}
+                    </div>
+                  )}
+                  {Array.isArray(kp.importedExamples) && kp.importedExamples.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {kp.importedExamples.map((item, idx) => (
+                        <div key={`imp-ex-${idx}`} className="p-3 bg-indigo-50 rounded-xl">
+                          <p className="font-semibold text-indigo-800 mb-1">{item.title || `Esempio ${idx + 1}`}</p>
+                          <KatexContent className="text-indigo-700" content={String(item.content || '')} isHtml />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-4 p-4 bg-blue-50 rounded-xl">
                     <h4 className="font-semibold text-blue-800 mb-2">Cosa imparerai:</h4>
                     <ul className="list-disc list-inside text-blue-700 space-y-1">
@@ -328,12 +355,12 @@ export default function LearnPage() {
                   💡 Suggerimenti
                 </h3>
                 <ul className="space-y-3">
-                  {lightbulb.tips.map((tip, idx) => (
+                  {mergedTips.map((tip, idx) => (
                     <li key={idx} className="flex items-start gap-3">
                       <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
                         {idx + 1}
                       </span>
-                      <span className="text-gray-700">{tip}</span>
+                      <KatexContent className="text-gray-700" content={tip} />
                     </li>
                   ))}
                 </ul>
@@ -351,7 +378,7 @@ export default function LearnPage() {
                       <span className="w-6 h-6 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
                         !
                       </span>
-                      <span className="text-gray-700">{mistake}</span>
+                      <KatexContent className="text-gray-700" content={mistake} />
                     </li>
                   ))}
                 </ul>
@@ -369,7 +396,7 @@ export default function LearnPage() {
                       <span className="w-6 h-6 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
                         {idx + 1}
                       </span>
-                      <span className="text-gray-700">{app}</span>
+                      <KatexContent className="text-gray-700" content={app} />
                     </li>
                   ))}
                 </ul>
@@ -401,7 +428,7 @@ export default function LearnPage() {
                             {idx + 1}
                           </span>
                           <div>
-                            <p className="font-medium text-gray-800">{ex.question}</p>
+                            <KatexContent className="font-medium text-gray-800" content={ex.question} />
                             <p className="text-sm text-gray-500">Difficoltà: {'★'.repeat(ex.difficulty)}</p>
                           </div>
                         </div>

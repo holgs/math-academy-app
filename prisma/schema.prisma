@@ -89,6 +89,9 @@ model KnowledgePoint {
   prerequisites     String[] // Array of KP IDs
   interferenceLinks Json?    // { topicId: string, reason: string }[]
   encompassedSkills Json?    // { skillDescription: string }[]
+  theoryContent     Json?
+  tipsContent       Json?
+  examplesContent   Json?
   
   exercises         Exercise[]
   progress          UserProgress[]

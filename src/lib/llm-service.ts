@@ -192,34 +192,57 @@ Genera l'esercizio ora:`;
   }
 
   private async generateWithGLM(prompt: string, config: LLMConfig): Promise<ExerciseTemplate> {
-    const response = await fetch('https://api.z.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey}`,
+    const endpoints = [
+      {
+        url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+        defaultModel: 'glm-4-flash',
       },
-      body: JSON.stringify({
-        model: config.model || DEFAULT_MODELS.glm,
-        messages: [
-          { role: 'system', content: 'Sei un generatore di esercizi matematici. Rispondi in italiano con JSON valido.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
-    });
+      {
+        url: 'https://api.z.ai/v1/chat/completions',
+        defaultModel: DEFAULT_MODELS.glm,
+      },
+    ];
 
-    if (!response.ok) {
-      throw new Error(`GLM API error: ${response.status}`);
+    const errors: string[] = [];
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint.url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: config.model || endpoint.defaultModel,
+            messages: [
+              { role: 'system', content: 'Sei un generatore di esercizi matematici. Rispondi in italiano con JSON valido.' },
+              { role: 'user', content: prompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 1000,
+          }),
+        });
+
+        if (!response.ok) {
+          errors.push(`${endpoint.url} -> ${response.status}`);
+          continue;
+        }
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (!content) {
+          errors.push(`${endpoint.url} -> empty response`);
+          continue;
+        }
+
+        return this.parseExerciseResponse(content);
+      } catch (error: any) {
+        errors.push(`${endpoint.url} -> ${error?.message || 'network error'}`);
+      }
     }
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) {
-      throw new Error('Empty response from GLM');
-    }
-
-    return this.parseExerciseResponse(content);
+    throw new Error(`GLM API error: ${errors.join(' | ')}`);
   }
 
   private parseExerciseResponse(text: string): ExerciseTemplate {
@@ -278,19 +301,44 @@ Restituisci SOLO JSON:
       const result = await this.googleModel!.generateContent(prompt);
       content = result.response.text();
     } else {
-      const response = await fetch('https://api.z.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: config.model || DEFAULT_MODELS.glm,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-      const data = await response.json();
-      content = data.choices?.[0]?.message?.content || '';
+      const endpoints = [
+        { url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'glm-4-flash' },
+        { url: 'https://api.z.ai/v1/chat/completions', model: DEFAULT_MODELS.glm },
+      ];
+
+      let lastError = 'Unknown GLM error';
+      content = '';
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint.url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${config.apiKey}`,
+            },
+            body: JSON.stringify({
+              model: config.model || endpoint.model,
+              messages: [{ role: 'user', content: prompt }],
+            }),
+          });
+          if (!response.ok) {
+            lastError = `${endpoint.url} -> ${response.status}`;
+            continue;
+          }
+          const data = await response.json();
+          content = data.choices?.[0]?.message?.content || '';
+          if (content) {
+            break;
+          }
+          lastError = `${endpoint.url} -> empty response`;
+        } catch (error: any) {
+          lastError = error?.message || 'network error';
+        }
+      }
+
+      if (!content) {
+        throw new Error(lastError);
+      }
     }
 
     const jsonMatch = content.match(/\{[\s\S]*\}/);

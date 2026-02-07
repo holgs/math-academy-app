@@ -1,6 +1,6 @@
 # PRD - Math Academy App
 
-Versione: 3.0
+Versione: 3.1
 Data: 07 Febbraio 2026
 Stato: In implementazione (aggiornato alle funzionalita docente/studente richieste)
 
@@ -101,7 +101,20 @@ Requisito:
 
 Implementazione:
 - endpoint `POST /api/teacher/llm/verify` (test connessione e generazione sample),
-- pulsante verifica nella pagina docente esercizi (`src/app/teacher/exercises/page.tsx`).
+- pulsante verifica nella pagina docente esercizi (`src/app/teacher/exercises/page.tsx`),
+- fallback multi-endpoint su GLM per ridurre errori 404.
+
+## 4.1 Generazione/Import JSON esercizi (schema + prompt)
+Requisito:
+- mostrare nello stesso punto operativo il prompt consigliato e lo schema JSON,
+- importare bundle JSON con teoria, suggerimenti, esempi ed esercizi.
+
+Implementazione:
+- endpoint `POST /api/teacher/exercises/import`,
+- sezione dedicata in `src/app/teacher/exercises/page.tsx` con:
+  - schema JSON di riferimento,
+  - prompt template per LLM,
+  - textarea import JSON e salvataggio su argomento selezionato.
 
 ## 5. Knowledge Graph a livelli indentati e sblocco progressivo
 Requisito:
@@ -109,8 +122,22 @@ Requisito:
 
 Implementazione:
 - endpoint docente `GET /api/teacher/knowledge-points?mode=flat` con `depth=layer`,
-- menu progressivo su argomenti (navigazione per layer/prerequisiti),
-- knowledge graph studente mantiene unlock via prerequisiti e stato progress.
+- endpoint studente `GET /api/knowledge-graph?mode=progressive` con apertura progressiva,
+- componente mappa aggiornato con drill-down generale->particolare,
+- dettaglio nodo con teoria/suggerimenti/esempi/esercizi importati.
+
+## 5.1 Rendering formule matematiche
+Requisito:
+- visualizzare formule matematiche con resa tipografica adeguata.
+
+Implementazione:
+- rendering KaTeX lato client tramite CDN (`katex` + `auto-render`),
+- componente `src/components/KatexContent.tsx`,
+- applicazione in:
+  - mappa conoscenza,
+  - pagina studio argomento,
+  - pagina esercizi studente,
+  - anteprima/presentazione lezioni LIM.
 
 ## 6. Modello Dati (Sintesi)
 Nuove entita principali introdotte:
@@ -122,6 +149,7 @@ Estensioni:
 - `User`: `nickname`, `avatarUrl`,
 - `Lesson`: timer/soglia/successo,
 - `ExerciseAttempt`: collegamento opzionale ad assignment.
+- `KnowledgePoint`: `theoryContent`, `tipsContent`, `examplesContent`.
 
 ## 7. Stato Funzionale
 Implementato in questa release:
@@ -132,6 +160,9 @@ Implementato in questa release:
 - export PDF lezione,
 - controllo timer e percentuale successo in presentazione LIM,
 - verifica provider LLM lato docente,
+- import JSON guidato (prompt + schema) in area esercizi docente,
+- rendering KaTeX esteso nelle viste didattiche,
+- knowledge graph progressivo con dettaglio contenuti importati,
 - aggiornamento PRD e schema dati.
 
 A completamento successivo (roadmap):

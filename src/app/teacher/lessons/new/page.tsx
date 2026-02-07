@@ -13,6 +13,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import Link from 'next/link';
+import KatexContent from '@/components/KatexContent';
 
 interface KnowledgePoint {
   id: string;
@@ -397,11 +398,10 @@ export default function NewLessonPage() {
                           />
                           <div className="neu-pressed p-3 rounded-xl min-h-[120px] overflow-auto">
                             <p className="text-xs text-gray-500 mb-2">Anteprima</p>
-                            <div
+                            <KatexContent
                               className="prose prose-sm max-w-none text-gray-700"
-                              dangerouslySetInnerHTML={{
-                                __html: slidePreviewHtml(String(slide.content || '')),
-                              }}
+                              content={slidePreviewHtml(String(slide.content || ''))}
+                              isHtml
                             />
                           </div>
                         </div>

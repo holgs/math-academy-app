@@ -25,6 +25,9 @@ export async function GET(
         description: true,
         layer: true,
         prerequisites: true,
+        theoryContent: true,
+        tipsContent: true,
+        examplesContent: true,
       },
     });
 
@@ -42,10 +45,27 @@ export async function GET(
       },
     });
 
+    const examples = await prisma.exercise.findMany({
+      where: { knowledgePointId: id },
+      select: {
+        id: true,
+        question: true,
+        answer: true,
+        hint: true,
+        difficulty: true,
+      },
+      orderBy: [{ difficulty: 'asc' }, { createdAt: 'desc' }],
+      take: 12,
+    });
+
     return NextResponse.json({
       ...kp,
       status: progress?.status || 'LOCKED',
       masteryLevel: progress?.masteryLevel || 0,
+      importedTheory: Array.isArray(kp.theoryContent) ? kp.theoryContent : [],
+      importedTips: Array.isArray(kp.tipsContent) ? kp.tipsContent : [],
+      importedExamples: Array.isArray(kp.examplesContent) ? kp.examplesContent : [],
+      examples,
     });
   } catch (error) {
     console.error('Error fetching knowledge point:', error);

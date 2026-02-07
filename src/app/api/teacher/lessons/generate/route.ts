@@ -162,20 +162,35 @@ Restituisci SOLO un array JSON in questo formato:
       content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     } else {
       // GLM
-      const response = await fetch('https://api.z.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${llmService.getConfig('glm')?.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: llmService.getConfig('glm')?.model || 'glm-4.7',
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-      
-      const data = await response.json();
-      content = data.choices?.[0]?.message?.content || '';
+      const endpoints = [
+        { url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'glm-4-flash' },
+        { url: 'https://api.z.ai/v1/chat/completions', model: 'glm-4.7' },
+      ];
+
+      content = '';
+      for (const endpoint of endpoints) {
+        const response = await fetch(endpoint.url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${llmService.getConfig('glm')?.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: llmService.getConfig('glm')?.model || endpoint.model,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        });
+
+        if (!response.ok) {
+          continue;
+        }
+
+        const data = await response.json();
+        content = data.choices?.[0]?.message?.content || '';
+        if (content) {
+          break;
+        }
+      }
     }
 
     // Parse JSON from response
