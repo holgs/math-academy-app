@@ -14,7 +14,6 @@ import {
   BookOpen,
   Play,
   Trash2,
-  Edit
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -23,8 +22,12 @@ interface Lesson {
   title: string;
   description: string;
   knowledgePointId: string;
-  knowledgePointTitle: string;
+  knowledgePointTitle?: string;
+  knowledgePoint?: { title: string };
   createdAt: string;
+  inClassTimerMinutes: number;
+  passThresholdPercent: number;
+  lastSuccessPercent: number | null;
   slides: Slide[];
 }
 
@@ -176,12 +179,6 @@ export default function TeacherLessons() {
                     <BookOpen className="w-5 h-5 text-purple-600" />
                   </div>
                   <div className="flex gap-1">
-                    <Link 
-                      href={`/teacher/lessons/${lesson.id}/edit`}
-                      className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </Link>
                     <button 
                       onClick={() => handleDelete(lesson.id)}
                       className="p-2 text-gray-400 hover:text-red-600 transition-colors"
@@ -197,11 +194,23 @@ export default function TeacherLessons() {
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <BookOpen className="w-3 h-3" />
-                    <span>{lesson.knowledgePointTitle}</span>
+                    <span>{lesson.knowledgePoint?.title || lesson.knowledgePointTitle || 'Argomento'}</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <Presentation className="w-3 h-3" />
                     <span>{lesson.slides?.length || 0} slide</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <Clock className="w-3 h-3" />
+                    <span>Timer: {lesson.inClassTimerMinutes || 15} min</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <Users className="w-3 h-3" />
+                    <span>Soglia: {lesson.passThresholdPercent || 70}%</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <ChevronRight className="w-3 h-3" />
+                    <span>Successo: {lesson.lastSuccessPercent ?? 'n/d'}%</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <Calendar className="w-3 h-3" />
@@ -209,13 +218,21 @@ export default function TeacherLessons() {
                   </div>
                 </div>
 
-                <Link 
-                  href={`/teacher/lessons/${lesson.id}/present`}
-                  className="neu-button w-full py-2 flex items-center justify-center gap-2 bg-purple-600 text-white"
-                >
-                  <Play className="w-4 h-4" />
-                  Presenta
-                </Link>
+                <div className="grid grid-cols-2 gap-2">
+                  <Link
+                    href={`/teacher/lessons/${lesson.id}/present`}
+                    className="neu-button w-full py-2 flex items-center justify-center gap-2 bg-purple-600 text-white"
+                  >
+                    <Play className="w-4 h-4" />
+                    Presenta
+                  </Link>
+                  <a
+                    href={`/api/teacher/lessons/${lesson.id}/pdf`}
+                    className="neu-button w-full py-2 flex items-center justify-center gap-2 text-gray-700"
+                  >
+                    PDF
+                  </a>
+                </div>
               </motion.div>
             ))}
           </div>

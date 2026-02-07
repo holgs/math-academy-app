@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { NextResponse } from 'next/server';
-import { llmService } from '@/lib/llm-service';
 import { sanitizeHtml } from '@/lib/sanitize-html';
 
 const VALID_SLIDE_TYPES = new Set(['content', 'example', 'exercise', 'summary']);
@@ -66,7 +65,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { title, description, knowledgePointId, slides } = await req.json();
+    const {
+      title,
+      description,
+      knowledgePointId,
+      slides,
+      inClassTimerMinutes,
+      passThresholdPercent,
+    } = await req.json();
 
     if (!title || !knowledgePointId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -89,12 +95,24 @@ export async function POST(req: Request) {
         }))
       : [];
 
+    const timer = Number(inClassTimerMinutes ?? 15);
+    const threshold = Number(passThresholdPercent ?? 70);
+
+    if (!Number.isInteger(timer) || timer < 1 || timer > 180) {
+      return NextResponse.json({ error: 'Timer in classe non valido (1-180 min)' }, { status: 400 });
+    }
+    if (!Number.isFinite(threshold) || threshold < 1 || threshold > 100) {
+      return NextResponse.json({ error: 'Soglia passaggio non valida (1-100%)' }, { status: 400 });
+    }
+
     const lesson = await prisma.lesson.create({
       data: {
         title: String(title).slice(0, 200),
         description: String(description || ''),
         knowledgePointId,
         teacherId: session.user.id,
+        inClassTimerMinutes: timer,
+        passThresholdPercent: Math.round(threshold),
         slides: {
           create: preparedSlides,
         },

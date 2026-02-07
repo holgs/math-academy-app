@@ -1,183 +1,140 @@
-Ecco il **Product Requirements Document (PRD)** completo e consolidato in un unico oggetto. Questo documento include tutte le modifiche discusse: il modello "Blended" (lezione frontale + esercitazione a casa autonoma), l'uso rigoroso del grafo della conoscenza basato sul tuo schema JSON e l'integrazione con l'LLM.
+# PRD - Math Academy App
 
----
+Versione: 3.0
+Data: 07 Febbraio 2026
+Stato: In implementazione (aggiornato alle funzionalita docente/studente richieste)
 
-# PRODUCT REQUIREMENTS DOCUMENT (PRD)
+## 1. Obiettivo Prodotto
+Math Academy supporta una didattica blended:
+- lezione frontale LIM guidata dal docente (argomento atomizzato + esercizi in classe con timer),
+- esercitazione autonoma studente con assegnazioni, scadenze, tracciamento tentativi e gamification,
+- monitoraggio docente a livello classe e singolo studente,
+- gestione progressiva tramite knowledge graph a livelli sbloccabili.
 
-## Progetto: MathFlow Blended (Titolo di Lavoro)
+## 2. Requisiti Docente
 
-**Versione:** 2.1
-**Data:** 03 Febbraio 2026
-**Stato:** Draft per Sviluppo
+### 2.0 Gestione classi e import CSV
+Requisito:
+- creare classi,
+- importare studenti da CSV con colonne `nome,cognome,email`.
 
----
+Implementazione:
+- endpoint `GET/POST/PATCH/DELETE /api/teacher/classes`,
+- pagina `src/app/teacher/classes/page.tsx`,
+- import CSV con creazione studente (password iniziale generata) o link a studente esistente,
+- enrollment automatico in classe.
 
-## 1. Executive Summary
+### 2.1 Lezione LIM atomizzata + timer + soglia passaggio + PDF
+Requisito:
+- creare lezione LIM su argomento atomizzato,
+- includere esempi ed esercizi in classe con timer,
+- mostrare percentuale successo per passaggio fase successiva,
+- ottenere PDF della lezione.
 
-**MathFlow Blended** è una piattaforma didattica per la matematica che combina l'efficacia dell'istruzione diretta in classe con la potenza dell'apprendimento adattivo personalizzato a casa.
-Il sistema permette al docente di pianificare un intero anno scolastico basandosi su un **Grafo della Conoscenza (DAG)** granulare. L'AI (LLM) genera automaticamente i supporti visivi per la lezione frontale (LIM) e, parallelamente, pacchetti di esercizi gamificati che gli studenti svolgono a casa sui propri dispositivi.
+Implementazione:
+- campi lezione: `inClassTimerMinutes`, `passThresholdPercent`, `lastSuccessPercent`,
+- editor creazione lezione con timer/soglia (`src/app/teacher/lessons/new/page.tsx`),
+- presenter con timer, inserimento percentuale successo e decisione pass/fail (`src/app/teacher/lessons/[id]/present/page.tsx`),
+- salvataggio metriche via `PATCH /api/teacher/lessons/[id]`,
+- export PDF via `GET /api/teacher/lessons/[id]/pdf`.
 
-**Problema Risolto:**
+### 2.1.1 Assegnazione esercizi a classe o singolo studente, con scadenza
+Requisito:
+- assegnare compiti a classe intera e/o granularmente a studenti,
+- impostare scadenza.
 
-* Colma il divario tra i tempi rigidi della lezione scolastica e i tempi individuali di apprendimento.
-* Elimina la necessità di hardware costoso (tablet) per ogni studente in classe.
-* Automatizza la creazione di materiale didattico di alta qualità e coerente.
+Implementazione:
+- endpoint `GET/POST /api/teacher/assignments`,
+- pagina `src/app/teacher/assignments/page.tsx`,
+- selezione classe, studenti specifici, argomento e sotto-argomenti,
+- scadenza obbligatoria e stato per target studente.
 
----
+### 2.2 Creazione esercizi + spaced learning automatico
+Requisito:
+- docente sceglie argomento, sotto-argomenti, numero esercizi,
+- attiva spaced learning per inserimento automatico futuro.
 
-## 2. Utenti e Personas
+Implementazione:
+- creazione assignment con `knowledgePointId`, `subtopics`, `exerciseCount`, `spacedLearningEnabled`,
+- attivazione `StudentSpacedTopic` per gli studenti assegnati,
+- endpoint daily esercizi integra i topic spaced (`/api/exercises/daily`).
 
-### 2.1 Il Docente (The Conductor)
+### 2.3 Monitoraggio esiti classe e studente
+Requisito:
+- dashboard per singolo studente e complessiva classe.
 
-* **Obiettivo:** Pianificare il programma, spiegare concetti complessi alla LIM, monitorare chi rimane indietro.
-* **Pain Point:** Tempo eccessivo per creare slide ed esercizi differenziati; difficoltà nel tracciare le lacune pregresse.
-* **Interazione:** Desktop (Pianificazione) e LIM (Erogazione).
+Implementazione:
+- dashboard docente con snapshot studenti e metriche aggregate,
+- pagina gestione studenti con KPI (`src/app/teacher/students/page.tsx`),
+- metriche assignment: progress medio, completati, tentativi per target.
 
-### 2.2 Lo Studente (The Player)
+## 3. Requisiti Studente
 
-* **Obiettivo:** Capire la lezione, esercitarsi senza frustrazione, ricevere gratificazione immediata (Gamification).
-* **Pain Point:** Noia, paura di sbagliare, esercizi a casa troppo difficili senza aiuto.
-* **Interazione:** Smartphone/PC (A casa).
+### 3.1 Ricezione compiti con scadenza
+Implementazione:
+- endpoint `GET /api/student/assignments`,
+- dashboard studente mostra compiti assegnati, stato, scadenza,
+- apertura diretta compito su `/exercises?assignment=<id>`.
 
----
+### 3.2 Profilo: nickname e immagine
+Implementazione:
+- endpoint `GET/PATCH /api/student/profile`,
+- form dashboard per salvare nickname/avatarUrl.
 
-## 3. Core Principles & Metodologia
+### 3.3 XP e monete pi-greco
+Implementazione:
+- KPI in dashboard (`/api/user/stats`) + reward per tentativo corretto.
 
-Il sistema si basa rigidamente sui principi del documento "The Math Academy Way", adattati al contesto italiano:
+### 3.4 Log completo tentativi/errori/successi
+Implementazione:
+- endpoint `GET /api/student/activity`,
+- log storico in dashboard con esito, XP/monete e timestamp,
+- tracciamento assignment-aware in `ExerciseAttempt.assignmentId`.
 
-1. **Granularità Atomica:** Ogni lezione copre concetti minimi specifici (Knowledge Points - KP).
-2. **Grafo delle Dipendenze:** Nessun argomento viene proposto se i prerequisiti non sono "Mastered".
-3. **Spaced Repetition:** Il software a casa ripropone vecchi concetti appena prima che vengano dimenticati.
-4. **Interference Management:** Il sistema gestisce attivamente i concetti simili che generano confusione (es. Area vs Perimetro) grazie ai campi `interference_links` dello schema.
+### 3.5 Premi/skin
+Stato:
+- roadmap futura, non ancora implementato.
 
----
+## 4. Verifica generazione esercizi LLM
+Requisito:
+- verificare funzionamento della generazione con provider LLM.
 
-## 4. User Journey e Flussi Funzionali
+Implementazione:
+- endpoint `POST /api/teacher/llm/verify` (test connessione e generazione sample),
+- pulsante verifica nella pagina docente esercizi (`src/app/teacher/exercises/page.tsx`).
 
-### FASE A: Pianificazione (Docente - Una Tantum)
+## 5. Knowledge Graph a livelli indentati e sblocco progressivo
+Requisito:
+- livelli distinti che si aprono progressivamente/indentati.
 
-1. **Input:** Il docente seleziona il macro-argomento (es. "Algebra 1") e il monte ore totale disponibile (es. 50 ore).
-2. **Mapping:** Il sistema consulta il DB (Knowledge Graph), recupera i nodi necessari e li distribuisce nel calendario, rispettando le dipendenze.
-3. **Output:** Un piano lezioni modificabile (es. Lezione 1: "Monomi simili", Lezione 2: "Somma algebrica").
+Implementazione:
+- endpoint docente `GET /api/teacher/knowledge-points?mode=flat` con `depth=layer`,
+- menu progressivo su argomenti (navigazione per layer/prerequisiti),
+- knowledge graph studente mantiene unlock via prerequisiti e stato progress.
 
-### FASE B: Generazione Contenuti (AI Backend - Pre-Lezione)
+## 6. Modello Dati (Sintesi)
+Nuove entita principali introdotte:
+- `Classroom`, `ClassEnrollment`,
+- `HomeworkAssignment`, `HomeworkAssignmentExercise`, `HomeworkAssignmentTarget`,
+- `StudentSpacedTopic`.
 
-Quando il docente conferma una lezione, l'LLM (orchestrato dal sistema) genera due artefatti distinti:
+Estensioni:
+- `User`: `nickname`, `avatarUrl`,
+- `Lesson`: timer/soglia/successo,
+- `ExerciseAttempt`: collegamento opzionale ad assignment.
 
-1. **Il "Deck LIM":** Slide visive per la spiegazione frontale. Include definizioni, esempi animati passo-passo e problemi da risolvere collettivamente alla lavagna.
-2. **Il "Mission Pack" (JSON):** Una batteria di esercizi per l'app studente. Include:
-* Esercizi sul nuovo argomento.
-* Esercizi di ripasso (calcolati dall'algoritmo di Spaced Repetition).
-* Spiegazioni di recupero (hint) in caso di errore.
+## 7. Stato Funzionale
+Implementato in questa release:
+- classi + CSV,
+- assegnazioni con scadenza classe/singolo,
+- spaced learning automatico su assignment,
+- dashboard studente con compiti, profilo e log,
+- export PDF lezione,
+- controllo timer e percentuale successo in presentazione LIM,
+- verifica provider LLM lato docente,
+- aggiornamento PRD e schema dati.
 
-
-
-### FASE C: La Lezione in Classe (Sincrona - Solo Docente)
-
-* **Modalità Presentazione:** Interfaccia pulita, alto contrasto.
-* **Step-by-Step Reveal:** Il docente controlla il flusso. Le soluzioni non appaiono subito, permettendo il ragionamento di classe.
-* **Annotazioni:** Se la LIM è touch, il docente può scrivere sopra le slide generate.
-* **Nessun Login Studente:** In questa fase gli studenti ascoltano e partecipano analogicamente (quaderno/lavagna).
-
-### FASE D: Studio a Casa (Asincrono - Studente)
-
-1. **Accesso:** Lo studente apre l'app/web.
-2. **Dashboard Gamificata:** Vede la "Missione del Giorno", XP correnti, Livello, Classifica.
-3. **Esecuzione:** Svolge gli esercizi.
-* **Successo:** Guadagna monete/XP. Il nodo diventa "Mastered".
-* **Errore:** L'AI fornisce un feedback specifico. Se l'errore persiste, l'app scala la difficoltà o rimanda a un prerequisito.
-
-
-4. **Anti-Cheating (Opzionale):** L'algoritmo varia i dati numerici degli esercizi per ogni studente.
-
-### FASE E: Feedback Loop (Docente)
-
-Il giorno successivo, la Dashboard Docente mostra:
-
-* Argomenti compresi vs Argomenti ostici (es. "Il 40% ha sbagliato i segni").
-* Suggerimenti AI: "Consigliato ripasso rapido di 5 min sui segni prima della nuova lezione".
-
----
-
-## 5. Specifiche Tecniche e Dati
-
-### 5.1 Knowledge Graph (Schema JSON)
-
-Il database deve essere popolato seguendo rigorosamente lo schema fornito.
-
-* **Entità:** `KnowledgePoint`
-* **Campi Chiave:**
-* `id`: Identificativo univoco (es. `math.alg.01`).
-* `prerequisites`: Array di ID bloccanti.
-* `interference_links`: Array di oggetti `{topicId, reason}` per gestire la confusione cognitiva.
-* `layer`: Intero per visualizzazione a cipolla.
-
-
-
-### 5.2 Architettura AI (LLM)
-
-* **Ruolo:** Content Generator (non Curriculum Designer). La struttura è data dal Grafo, l'LLM riempie solo il testo/LaTeX.
-* **Prompt Engineering:** I prompt devono includere il JSON del nodo specifico per evitare allucinazioni.
-* **Validazione:** Ogni output dell'LLM (esercizi) deve essere parsabile in JSON strutturato per l'app.
-
-### 5.3 Gamification Engine
-
-* **XP (Punti Esperienza):** Misurano la progressione didattica.
-* **Coins (Monete):** Valuta spendibile (es. per sbloccare avatar o temi grafici dell'app).
-* **Leaderboard:** Classifiche settimanali (resettate per mantenere la motivazione).
-* **Streak:** Bonus per chi si esercita ogni giorno.
-
----
-
-## 6. Roadmap MVP (Minimum Viable Product)
-
-### Sprint 1: Data & Core
-
-* Implementazione Database (PostgreSQL/Mongo) con lo schema `KnowledgePoint`.
-* Popolamento del Grafo per 1 Macro-Argomento (es. "Equazioni Lineari") usando l'LLM come assistente data-entry.
-
-### Sprint 2: Teacher Tool & GenAI
-
-* Interfaccia Docente: Selezione argomento e visualizzazione calendario.
-* Pipeline LLM: Generazione del "Deck LIM" (HTML/React reveal).
-
-### Sprint 3: Student App (Web)
-
-* Interfaccia Mobile-First per gli studenti.
-* Motore di esecuzione esercizi (Input numerico/scelta multipla).
-* Sistema base di Login e assegnazione punteggi.
-
----
-
-## 7. Appendice: Schema del Grafo
-
-
-> ```json
-> {
->   "type": "object",
->   "required": ["id", "title", "description", "prerequisites", "layer"],
->   "properties": {
->     "id": { "type": "string" },
->     "title": { "type": "string" },
->     "description": { "type": "string" },
->     "layer": { "type": "integer" },
->     "prerequisites": { "type": "array", "items": { "type": "string" } },
->     "interference_links": {
->       "type": "array",
->       "items": {
->         "type": "object",
->         "properties": {
->           "topicId": { "type": "string" },
->           "reason": { "type": "string" }
->         }
->       }
->     },
->     "encompassed_skills": {
->       "type": "array",
->       "items": { "type": "object", "properties": { "skill_description": { "type": "string" } } }
->     }
->   }
-> }
-> 
-> ```
-> 
+A completamento successivo (roadmap):
+- economia premi/skin,
+- analitiche avanzate longitudinali classe,
+- editor visuale avanzato per struttura atomica multi-step.

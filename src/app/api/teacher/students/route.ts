@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getRequestIp, rateLimit } from '@/lib/rate-limit';
+import { initializeStudentProgress } from '@/lib/student-onboarding';
 
 async function requireTeacherOrAdmin() {
   const session = await getServerSession(authOptions) as { user: { id: string; role: string } } | null;
@@ -127,6 +128,8 @@ export async function POST(req: Request) {
         role: true,
       },
     });
+
+    await initializeStudentProgress(student.id);
 
     return NextResponse.json({ student }, { status: 201 });
   } catch (error) {

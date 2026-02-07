@@ -81,6 +81,8 @@ export const authOptions: AuthOptions = {
         token.coins = user.coins;
         token.level = user.level;
         token.streak = user.streak;
+        token.nickname = user.nickname ?? null;
+        token.avatarUrl = user.avatarUrl ?? null;
       }
       return token;
     },
@@ -92,6 +94,8 @@ export const authOptions: AuthOptions = {
         session.user.coins = token.coins as number;
         session.user.level = token.level as number;
         session.user.streak = token.streak as number;
+        session.user.nickname = (token.nickname as string | null) ?? null;
+        session.user.avatarUrl = (token.avatarUrl as string | null) ?? null;
       }
       return session;
     },

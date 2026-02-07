@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { NextResponse } from 'next/server';
+import { initializeStudentProgress } from '@/lib/student-onboarding';
 import { getRequestIp, rateLimit } from '@/lib/rate-limit';
 
 // Admin hardcoded
@@ -58,23 +59,7 @@ export async function POST(req: Request) {
       },
     });
 
-    // Initialize progress for all available knowledge points (layer 0, no prerequisites)
-    const availableKPs = await prisma.knowledgePoint.findMany({
-      where: {
-        layer: 0,
-        prerequisites: { isEmpty: true },
-      },
-    });
-
-    for (const kp of availableKPs) {
-      await prisma.userProgress.create({
-        data: {
-          userId: user.id,
-          knowledgePointId: kp.id,
-          status: 'AVAILABLE',
-        },
-      });
-    }
+    await initializeStudentProgress(user.id);
 
     return NextResponse.json(
       { message: 'User created successfully', userId: user.id },

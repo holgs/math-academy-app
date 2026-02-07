@@ -3,17 +3,18 @@
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Trophy, 
-  Coins, 
-  Flame, 
-  Target, 
+import {
+  Trophy,
+  Coins,
+  Flame,
+  Target,
   BookOpen,
-  TrendingUp,
   Star,
-  Zap,
-  Settings,
-  Bot
+  Bot,
+  Clock,
+  Save,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import KnowledgeGraph from './KnowledgeGraph';
 import LLMSettingsPanel from './LLMSettingsPanel';
@@ -27,24 +28,56 @@ interface UserStats {
   nextLevelXp: number;
 }
 
+interface StudentAssignment {
+  id: string;
+  title: string;
+  dueDate: string;
+  status: string;
+  progressPct: number;
+  exercisesCount: number;
+}
+
+interface StudentAttempt {
+  id: string;
+  question: string;
+  knowledgePointTitle: string;
+  isCorrect: boolean;
+  xpEarned: number;
+  coinsEarned: number;
+  createdAt: string;
+}
+
+interface StudentProfile {
+  nickname: string;
+  avatarUrl: string;
+}
+
 export default function Dashboard() {
   const { data: session } = useSession();
   const [stats, setStats] = useState<UserStats | null>(null);
+  const [assignments, setAssignments] = useState<StudentAssignment[]>([]);
+  const [activity, setActivity] = useState<StudentAttempt[]>([]);
+  const [profile, setProfile] = useState<StudentProfile>({ nickname: '', avatarUrl: '' });
   const [showSettings, setShowSettings] = useState(false);
   const [configuredProviders, setConfiguredProviders] = useState<string[]>([]);
-  
-  const user = session?.user as { 
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const user = session?.user as {
     name?: string | null;
     role: 'STUDENT' | 'TEACHER' | 'ADMIN';
     xp: number;
     coins: number;
     level: number;
     streak: number;
+    nickname?: string | null;
+    avatarUrl?: string | null;
   } | undefined;
 
-  // Fetch user stats
   useEffect(() => {
     fetchStats();
+    fetchAssignments();
+    fetchActivity();
+    fetchProfile();
     checkLLMConfig();
   }, []);
 
@@ -55,8 +88,67 @@ export default function Dashboard() {
         const data = await res.json();
         setStats(data);
       }
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
+    } catch {
+      // no-op
+    }
+  };
+
+  const fetchAssignments = async () => {
+    try {
+      const res = await fetch('/api/student/assignments');
+      if (res.ok) {
+        const data = await res.json();
+        setAssignments(data.assignments || []);
+      }
+    } catch {
+      // no-op
+    }
+  };
+
+  const fetchActivity = async () => {
+    try {
+      const res = await fetch('/api/student/activity');
+      if (res.ok) {
+        const data = await res.json();
+        setActivity(data.attempts || []);
+      }
+    } catch {
+      // no-op
+    }
+  };
+
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch('/api/student/profile');
+      if (res.ok) {
+        const data = await res.json();
+        setProfile({
+          nickname: data.profile?.nickname || user?.nickname || '',
+          avatarUrl: data.profile?.avatarUrl || user?.avatarUrl || '',
+        });
+      }
+    } catch {
+      setProfile({
+        nickname: user?.nickname || '',
+        avatarUrl: user?.avatarUrl || '',
+      });
+    }
+  };
+
+  const saveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      await fetch('/api/student/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nickname: profile.nickname,
+          avatarUrl: profile.avatarUrl,
+        }),
+      });
+      await fetchProfile();
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -73,130 +165,105 @@ export default function Dashboard() {
     setShowSettings(false);
   };
 
-  const roleLabels = {
-    STUDENT: { label: 'Studente', color: 'bg-blue-100 text-blue-700' },
-    TEACHER: { label: 'Docente', color: 'bg-purple-100 text-purple-700' },
-    ADMIN: { label: 'Admin', color: 'bg-red-100 text-red-700' },
-  };
-
-  const currentRole = user?.role ? roleLabels[user.role] : { label: 'Studente', color: 'bg-blue-100 text-blue-700' };
-
   const displayStats = stats || {
     xp: user?.xp || 0,
     coins: user?.coins || 0,
     level: user?.level || 1,
     streak: user?.streak || 0,
-    nextLevelXp: 100
+    nextLevelXp: 100,
   };
 
-  // Calculate XP progress
   const xpProgress = stats ? (stats.xp / stats.nextLevelXp) * 100 : 0;
 
   const statsCards = [
-    { 
-      icon: Trophy, 
-      label: 'XP', 
+    {
+      icon: Trophy,
+      label: 'XP',
       value: displayStats.xp,
       subtext: `/${displayStats.nextLevelXp}`,
       color: 'text-amber-600',
       bgColor: 'bg-amber-100',
       showProgress: true,
-      progress: xpProgress
+      progress: xpProgress,
     },
-    { 
-      icon: Coins, 
-      label: 'Monete', 
+    {
+      icon: Coins,
+      label: 'Monete pi-greco',
       value: displayStats.coins,
       color: 'text-yellow-600',
-      bgColor: 'bg-yellow-100'
+      bgColor: 'bg-yellow-100',
     },
-    { 
-      icon: Flame, 
-      label: 'Streak', 
+    {
+      icon: Flame,
+      label: 'Streak',
       value: `${displayStats.streak}`,
       subtext: 'giorni',
       color: 'text-orange-600',
-      bgColor: 'bg-orange-100'
+      bgColor: 'bg-orange-100',
     },
-    { 
-      icon: Star, 
-      label: 'Livello', 
+    {
+      icon: Star,
+      label: 'Livello',
       value: displayStats.level,
       color: 'text-purple-600',
-      bgColor: 'bg-purple-100'
+      bgColor: 'bg-purple-100',
     },
   ];
 
-  const quickActions = [
-    { icon: BookOpen, label: 'Continua', href: '/learn', color: 'text-green-600', bg: 'bg-green-50' },
-    { icon: Target, label: 'Esercizi', href: '/exercises', color: 'text-amber-600', bg: 'bg-amber-50' },
-    { icon: TrendingUp, label: 'Progressi', href: '/progress', color: 'text-blue-600', bg: 'bg-blue-50' },
-    { icon: Zap, label: 'Sfide', href: '/challenges', color: 'text-red-600', bg: 'bg-red-50' },
-  ];
+  const nextAssignment = assignments[0];
 
   return (
     <div className="min-h-screen p-4 md:p-8 bg-[#E0E5EC]">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
+      <div className="max-w-7xl mx-auto space-y-8">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+          className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
         >
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-3xl font-bold text-gray-800">
-                Ciao, {user?.name || 'Studente'}! 👋
-              </h1>
-              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${currentRole.color}`}>
-                {currentRole.label}
-              </span>
+          <div className="flex items-center gap-3">
+            {profile.avatarUrl ? (
+              <img src={profile.avatarUrl} alt="avatar" className="w-12 h-12 rounded-full object-cover" />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 text-white flex items-center justify-center font-bold">
+                {(profile.nickname || user?.name || 'S').charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800">Ciao, {profile.nickname || user?.name || 'Studente'}!</h1>
+              <p className="text-gray-600">Compiti, progressi e mappa conoscenza in un unico posto.</p>
             </div>
-            <p className="text-gray-600">
-              Pronto per la tua missione di oggi?
-            </p>
           </div>
-          
+
           <div className="flex gap-2">
+            {nextAssignment ? (
+              <Link href={`/exercises?assignment=${nextAssignment.id}`} className="neu-button px-4 py-2 bg-indigo-600 text-white flex items-center gap-2">
+                <Clock className="w-4 h-4" />
+                Apri prossimo compito
+              </Link>
+            ) : (
+              <Link href="/exercises" className="neu-button px-4 py-2 bg-indigo-600 text-white">Vai agli esercizi</Link>
+            )}
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className={`neu-button px-4 py-2 flex items-center gap-2 ${
-                configuredProviders.length > 0 ? 'text-green-600' : 'text-gray-600'
-              }`}
+              className={`neu-button px-4 py-2 flex items-center gap-2 ${configuredProviders.length > 0 ? 'text-green-600' : 'text-gray-600'}`}
             >
               <Bot size={18} />
               AI ({configuredProviders.length})
             </button>
-            
-            {user?.role === 'ADMIN' && (
-              <Link href="/admin" className="neu-button px-4 py-2 flex items-center gap-2 text-gray-700">
-                <Settings size={18} />
-                Admin
-              </Link>
-            )}
           </div>
         </motion.div>
 
-        {/* LLM Settings Panel */}
         {showSettings && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
-          >
-            <LLMSettingsPanel 
-              onClose={() => setShowSettings(false)} 
-              onConfigured={handleSettingsConfigured}
-            />
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
+            <LLMSettingsPanel onClose={() => setShowSettings(false)} onConfigured={handleSettingsConfigured} />
           </motion.div>
         )}
 
-        {/* Stats Grid */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"
+          className="grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           {statsCards.map((stat, index) => (
             <motion.div
@@ -208,13 +275,9 @@ export default function Dashboard() {
             >
               {stat.showProgress && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200">
-                  <div 
-                    className="h-full bg-amber-500 transition-all duration-500"
-                    style={{ width: `${stat.progress}%` }}
-                  />
+                  <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${stat.progress}%` }} />
                 </div>
               )}
-              
               <div className="flex items-center gap-3 mb-2">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${stat.bgColor}`}>
                   <stat.icon className={`w-5 h-5 ${stat.color}`} />
@@ -229,48 +292,88 @@ export default function Dashboard() {
           ))}
         </motion.div>
 
-        {/* Quick Actions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mb-8"
-        >
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Azioni Rapide</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {quickActions.map((action, index) => (
-              <Link key={action.label} href={action.href}>
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 + index * 0.05 }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="neu-button p-5 text-center cursor-pointer"
+        <div className="grid lg:grid-cols-3 gap-4">
+          <div className="neu-flat p-4 lg:col-span-2">
+            <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-indigo-600" />
+              Compiti assegnati
+            </h2>
+            <div className="space-y-2">
+              {assignments.slice(0, 8).map((assignment) => (
+                <Link
+                  key={assignment.id}
+                  href={`/exercises?assignment=${assignment.id}`}
+                  className="neu-button p-3 flex items-center justify-between"
                 >
-                  <div className={`w-12 h-12 rounded-xl ${action.bg} flex items-center justify-center mx-auto mb-3`}>
-                    <action.icon className={`w-6 h-6 ${action.color}`} />
+                  <div>
+                    <p className="font-medium text-gray-800">{assignment.title}</p>
+                    <p className="text-xs text-gray-500">Scadenza: {new Date(assignment.dueDate).toLocaleString('it-IT')}</p>
                   </div>
-                  <span className="text-gray-700 font-medium">{action.label}</span>
-                </motion.div>
-              </Link>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Knowledge Graph */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-800">Mappa della Conoscenza</h2>
-            <div className="text-sm text-gray-500">
-              Clicca 💡 per suggerimenti
+                  <div className="text-xs text-right text-gray-600">
+                    <p>{assignment.status}</p>
+                    <p>{Math.round(assignment.progressPct)}%</p>
+                  </div>
+                </Link>
+              ))}
+              {assignments.length === 0 && <p className="text-sm text-gray-500">Nessun compito assegnato al momento.</p>}
             </div>
           </div>
-          
+
+          <div className="neu-flat p-4 space-y-3">
+            <h2 className="text-lg font-bold text-gray-800">Profilo studente</h2>
+            <input
+              className="neu-input w-full px-3 py-2"
+              placeholder="Nickname"
+              value={profile.nickname}
+              onChange={(e) => setProfile((prev) => ({ ...prev, nickname: e.target.value }))}
+            />
+            <input
+              className="neu-input w-full px-3 py-2"
+              placeholder="URL immagine profilo"
+              value={profile.avatarUrl}
+              onChange={(e) => setProfile((prev) => ({ ...prev, avatarUrl: e.target.value }))}
+            />
+            <button
+              className="neu-button w-full px-3 py-2 bg-indigo-600 text-white flex items-center justify-center gap-2"
+              onClick={saveProfile}
+              disabled={savingProfile}
+            >
+              <Save className="w-4 h-4" />
+              {savingProfile ? 'Salvataggio...' : 'Salva profilo'}
+            </button>
+          </div>
+        </div>
+
+        <div className="neu-flat p-4">
+          <h2 className="text-lg font-bold text-gray-800 mb-3">Log completo tentativi</h2>
+          <div className="space-y-2 max-h-72 overflow-auto">
+            {activity.map((attempt) => (
+              <div key={attempt.id} className="neu-button p-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{attempt.question}</p>
+                  <p className="text-xs text-gray-500">{attempt.knowledgePointTitle} - {new Date(attempt.createdAt).toLocaleString('it-IT')}</p>
+                </div>
+                <div className="text-xs text-right">
+                  {attempt.isCorrect ? (
+                    <p className="text-green-700 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Corretto</p>
+                  ) : (
+                    <p className="text-red-700 flex items-center gap-1"><XCircle className="w-3 h-3" /> Errato</p>
+                  )}
+                  <p className="text-gray-600">+{attempt.xpEarned} XP</p>
+                  <p className="text-gray-600">+{attempt.coinsEarned} Monete</p>
+                </div>
+              </div>
+            ))}
+            {activity.length === 0 && <p className="text-sm text-gray-500">Nessun tentativo registrato.</p>}
+          </div>
+        </div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-800">Mappa della Conoscenza</h2>
+            <div className="text-sm text-gray-500">Livelli indentati con sblocco progressivo</div>
+          </div>
+
           <div className="neu-flat p-4">
             <KnowledgeGraph />
           </div>

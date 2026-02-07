@@ -10,6 +10,8 @@ declare module "next-auth" {
       coins: number;
       level: number;
       streak: number;
+      nickname?: string | null;
+      avatarUrl?: string | null;
     } & DefaultSession["user"]
   }
 
@@ -20,6 +22,8 @@ declare module "next-auth" {
     coins: number;
     level: number;
     streak: number;
+    nickname?: string | null;
+    avatarUrl?: string | null;
   }
 }
 
@@ -31,6 +35,8 @@ declare module "next-auth/jwt" {
     coins: number;
     level: number;
     streak: number;
+    nickname?: string | null;
+    avatarUrl?: string | null;
   }
 }
 
@@ -41,5 +47,7 @@ declare module "next-auth/adapters" {
     coins: number;
     level: number;
     streak: number;
+    nickname?: string | null;
+    avatarUrl?: string | null;
   }
 }

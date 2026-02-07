@@ -4,7 +4,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Bot, CheckCircle2, ChevronRight, Pencil, Plus, Save, Trash2, Wand2, X } from 'lucide-react';
+import { Bot, CheckCircle2, ChevronRight, Pencil, Plus, Save, ShieldCheck, Trash2, Wand2, X } from 'lucide-react';
 
 type KnowledgePoint = {
   id: string;
@@ -62,6 +62,8 @@ export default function TeacherExercisesPage() {
     hint: '',
     difficulty: 2,
   });
+  const [verifyingLlm, setVerifyingLlm] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<{ ok: boolean; elapsedMs?: number; error?: string } | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -205,6 +207,37 @@ export default function TeacherExercisesPage() {
       setError(err.message || 'Errore rete');
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function verifyLlmConnection() {
+    if (!apiKey.trim()) {
+      setError('Inserisci una API key per verificare la connessione LLM');
+      return;
+    }
+    setVerifyingLlm(true);
+    setError('');
+    setVerifyResult(null);
+    try {
+      const res = await fetch('/api/teacher/llm/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          apiKey,
+          model: model.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Verifica LLM fallita');
+      }
+      setVerifyResult({ ok: true, elapsedMs: data.elapsedMs });
+    } catch (err: any) {
+      setVerifyResult({ ok: false, error: err.message || 'Errore rete' });
+      setError(err.message || 'Errore rete');
+    } finally {
+      setVerifyingLlm(false);
     }
   }
 
@@ -390,6 +423,24 @@ export default function TeacherExercisesPage() {
               value={model}
               onChange={(e) => setModel(e.target.value)}
             />
+
+            <button
+              type="button"
+              onClick={verifyLlmConnection}
+              disabled={verifyingLlm}
+              className="neu-button w-full px-3 py-2 flex items-center justify-center gap-2 text-indigo-700 disabled:opacity-50"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              {verifyingLlm ? 'Verifica in corso...' : 'Verifica connessione LLM'}
+            </button>
+
+            {verifyResult && (
+              <div className={`text-xs p-2 rounded ${verifyResult.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {verifyResult.ok
+                  ? `Connessione LLM OK (${verifyResult.elapsedMs} ms)`
+                  : `Verifica fallita: ${verifyResult.error}`}
+              </div>
+            )}
 
             <label className="text-sm text-gray-600 flex items-center gap-2">
               <input

@@ -19,6 +19,7 @@ import {
   Activity,
   GraduationCap,
   BarChart3,
+  ClipboardList,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -241,6 +242,28 @@ export default function TeacherDashboard() {
                   <div className="flex items-center gap-3">
                     <PencilRuler className="w-5 h-5 text-emerald-600" />
                     <span className="font-medium">Gestisci Esercizi</span>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                </Link>
+
+                <Link
+                  href="/teacher/classes"
+                  className="neu-button w-full p-4 flex items-center justify-between hover:bg-blue-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <Users className="w-5 h-5 text-blue-600" />
+                    <span className="font-medium">Gestisci Classi</span>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                </Link>
+
+                <Link
+                  href="/teacher/assignments"
+                  className="neu-button w-full p-4 flex items-center justify-between hover:bg-indigo-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <ClipboardList className="w-5 h-5 text-indigo-600" />
+                    <span className="font-medium">Assegna Compiti</span>
                   </div>
                   <ChevronRight className="w-5 h-5 text-gray-400" />
                 </Link>

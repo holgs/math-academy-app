@@ -49,6 +49,8 @@ export default function NewLessonPage() {
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
   const [slides, setSlides] = useState<DraftSlide[]>([]);
+  const [inClassTimerMinutes, setInClassTimerMinutes] = useState(15);
+  const [passThresholdPercent, setPassThresholdPercent] = useState(70);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -151,6 +153,8 @@ export default function NewLessonPage() {
           description,
           knowledgePointId: selectedKP,
           slides: normalizedSlides,
+          inClassTimerMinutes,
+          passThresholdPercent,
         }),
       });
 
@@ -338,6 +342,31 @@ export default function NewLessonPage() {
                     rows={3}
                     className="neu-input w-full px-4 py-2"
                   />
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Timer esercizi in classe (min)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={180}
+                      value={inClassTimerMinutes}
+                      onChange={(e) => setInClassTimerMinutes(Number(e.target.value))}
+                      className="neu-input w-full px-4 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Soglia successo passaggio (%)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={passThresholdPercent}
+                      onChange={(e) => setPassThresholdPercent(Number(e.target.value))}
+                      className="neu-input w-full px-4 py-2"
+                    />
+                  </div>
                 </div>
 
                 <div>

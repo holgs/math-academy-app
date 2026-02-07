@@ -7,11 +7,11 @@ import { sanitizeHtml } from '@/lib/sanitize-html';
 import { 
   ChevronLeft, 
   ChevronRight, 
+  Download,
   Maximize2, 
   Minimize2,
+  Timer,
   X,
-  Play,
-  Pause,
   Grid3X3
 } from 'lucide-react';
 
@@ -27,6 +27,9 @@ interface Lesson {
   id: string;
   title: string;
   description: string;
+  inClassTimerMinutes: number;
+  passThresholdPercent: number;
+  lastSuccessPercent: number | null;
   slides: Slide[];
 }
 
@@ -40,6 +43,10 @@ export default function PresentLesson() {
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showThumbnails, setShowThumbnails] = useState(false);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerSecondsLeft, setTimerSecondsLeft] = useState(0);
+  const [successPercent, setSuccessPercent] = useState('');
+  const [savingMetrics, setSavingMetrics] = useState(false);
 
   useEffect(() => {
     if (lessonId) {
@@ -109,6 +116,67 @@ export default function PresentLesson() {
     setIsFullscreen(false);
   };
 
+  useEffect(() => {
+    if (!lesson) return;
+    setTimerSecondsLeft(Math.max(60, (lesson.inClassTimerMinutes || 15) * 60));
+    setSuccessPercent(
+      lesson.lastSuccessPercent !== null && lesson.lastSuccessPercent !== undefined
+        ? String(Math.round(lesson.lastSuccessPercent))
+        : ''
+    );
+  }, [lesson]);
+
+  useEffect(() => {
+    if (!timerRunning) return;
+    if (timerSecondsLeft <= 0) {
+      setTimerRunning(false);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setTimerSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timerRunning, timerSecondsLeft]);
+
+  async function saveLessonMetrics() {
+    if (!lesson) return;
+    const parsed = successPercent.trim() === '' ? null : Number(successPercent);
+    if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0 || parsed > 100)) {
+      alert('Percentuale successo non valida (0-100)');
+      return;
+    }
+
+    setSavingMetrics(true);
+    try {
+      const res = await fetch(`/api/teacher/lessons/${lesson.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lastSuccessPercent: parsed,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Errore salvataggio metriche');
+      }
+      setLesson((prev) => prev ? { ...prev, ...data.lesson } : prev);
+    } catch (error: any) {
+      alert(error?.message || 'Errore salvataggio');
+    } finally {
+      setSavingMetrics(false);
+    }
+  }
+
+  function resetTimer() {
+    if (!lesson) return;
+    setTimerRunning(false);
+    setTimerSecondsLeft(Math.max(60, (lesson.inClassTimerMinutes || 15) * 60));
+  }
+
+  const minutes = Math.floor(timerSecondsLeft / 60).toString().padStart(2, '0');
+  const seconds = (timerSecondsLeft % 60).toString().padStart(2, '0');
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
@@ -148,6 +216,13 @@ export default function PresentLesson() {
         </div>
 
         <div className="flex items-center gap-2">
+          <a
+            href={`/api/teacher/lessons/${lesson.id}/pdf`}
+            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+            title="Scarica PDF lezione"
+          >
+            <Download className="w-5 h-5" />
+          </a>
           <button 
             onClick={() => setShowThumbnails(!showThumbnails)}
             className={`p-2 rounded-lg transition-colors ${showThumbnails ? 'bg-gray-700' : 'hover:bg-gray-700'}`}
@@ -206,6 +281,62 @@ export default function PresentLesson() {
             />
           </motion.div>
         </AnimatePresence>
+      </div>
+
+      {/* Teaching Controls */}
+      <div className="fixed right-4 top-20 z-40 bg-gray-800/95 border border-gray-700 rounded-xl p-3 w-72 space-y-3">
+        <div className="text-xs uppercase tracking-wider text-gray-400">Controllo Lezione</div>
+        <div className="text-sm text-gray-200">
+          Soglia passaggio: <strong>{lesson.passThresholdPercent}%</strong>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs text-gray-400 flex items-center gap-1">
+            <Timer className="w-3 h-3" />
+            Timer esercizi in classe
+          </label>
+          <div className="flex items-center justify-between bg-gray-900 rounded px-2 py-1">
+            <span className={`font-mono text-lg ${timerSecondsLeft <= 10 ? 'text-red-400' : 'text-green-400'}`}>
+              {minutes}:{seconds}
+            </span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setTimerRunning((prev) => !prev)}
+                className="px-2 py-1 rounded bg-gray-700 text-xs"
+              >
+                {timerRunning ? 'Pausa' : 'Start'}
+              </button>
+              <button
+                onClick={resetTimer}
+                className="px-2 py-1 rounded bg-gray-700 text-xs"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs text-gray-400">Successo classe (%)</label>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={successPercent}
+            onChange={(e) => setSuccessPercent(e.target.value)}
+            className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm"
+            placeholder="es. 78"
+          />
+          <div className="text-xs text-gray-300">
+            Passaggio fase: {Number(successPercent) >= lesson.passThresholdPercent ? 'SI' : 'NO'}
+          </div>
+          <button
+            onClick={saveLessonMetrics}
+            disabled={savingMetrics}
+            className="w-full px-2 py-1 rounded bg-purple-600 text-white text-sm disabled:opacity-50"
+          >
+            {savingMetrics ? 'Salvataggio...' : 'Salva percentuale'}
+          </button>
+        </div>
       </div>
 
       {/* Thumbnails Panel */}

@@ -19,6 +19,27 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const parentId = searchParams.get('parentId');
+    const mode = searchParams.get('mode');
+
+    if (mode === 'flat') {
+      const points = await prisma.knowledgePoint.findMany({
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          layer: true,
+          prerequisites: true,
+        },
+        orderBy: [{ layer: 'asc' }, { title: 'asc' }],
+      });
+
+      return NextResponse.json({
+        points: points.map((point) => ({
+          ...point,
+          depth: point.layer,
+        })),
+      });
+    }
 
     const where = parentId
       ? { prerequisites: { has: parentId } }

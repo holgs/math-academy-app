@@ -38,8 +38,26 @@ export async function GET(req: Request) {
       take: 2,
     });
 
+    // 2b. Include forced spaced-learning topics created by teacher assignments
+    const spacedTopics = await prisma.studentSpacedTopic.findMany({
+      where: {
+        studentId: userId,
+        active: true,
+        nextDueAt: { lte: new Date() },
+      },
+      select: {
+        knowledgePointId: true,
+      },
+      take: 3,
+      orderBy: { nextDueAt: 'asc' },
+    });
+
     // 3. Get exercises from these knowledge points
-    const kpIds = [...availableKPs.map(k => k.knowledgePointId), ...reviewKPs.map(k => k.knowledgePointId)];
+    const kpIds = Array.from(new Set([
+      ...availableKPs.map(k => k.knowledgePointId),
+      ...reviewKPs.map(k => k.knowledgePointId),
+      ...spacedTopics.map(k => k.knowledgePointId),
+    ]));
 
     const exercises = await prisma.exercise.findMany({
       where: {
@@ -86,7 +104,7 @@ export async function GET(req: Request) {
       exercises: exercisesWithStatus.slice(0, 5),
       stats: {
         newCount: availableKPs.length,
-        reviewCount: reviewKPs.length,
+        reviewCount: reviewKPs.length + spacedTopics.length,
       },
     });
   } catch (error) {

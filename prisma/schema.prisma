@@ -37,9 +37,11 @@ model Session {
 model User {
   id            String    @id @default(cuid())
   name          String?
+  nickname      String?
   email         String    @unique
   emailVerified DateTime?
   image         String?
+  avatarUrl     String?
   password      String?
   role          UserRole  @default(STUDENT)
   
@@ -55,6 +57,11 @@ model User {
   progress      UserProgress[]
   attempts      ExerciseAttempt[]
   lessons       Lesson[]
+  classesTaught Classroom[]            @relation("ClassroomTeacher")
+  classMemberships ClassEnrollment[]
+  assignmentsCreated HomeworkAssignment[] @relation("AssignmentCreator")
+  assignmentTargets HomeworkAssignmentTarget[]
+  spacedTopics  StudentSpacedTopic[]
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -86,6 +93,8 @@ model KnowledgePoint {
   exercises         Exercise[]
   progress          UserProgress[]
   lessons           Lesson[]
+  assignments       HomeworkAssignment[]
+  spacedTopics      StudentSpacedTopic[]
   
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -115,6 +124,7 @@ model Exercise {
   
   knowledgePoint   KnowledgePoint @relation(fields: [knowledgePointId], references: [id], onDelete: Cascade)
   attempts         ExerciseAttempt[]
+  assignmentItems  HomeworkAssignmentExercise[]
   
   createdAt        DateTime @default(now())
 }
@@ -123,6 +133,7 @@ model ExerciseAttempt {
   id          String   @id @default(cuid())
   userId      String
   exerciseId  String
+  assignmentId String?
   answer      String
   isCorrect   Boolean
   xpEarned    Int      @default(0)
@@ -131,6 +142,7 @@ model ExerciseAttempt {
   
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   exercise    Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  assignment  HomeworkAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   
   createdAt   DateTime @default(now())
 }
@@ -148,6 +160,9 @@ model Lesson {
   description      String
   knowledgePointId String
   teacherId        String
+  inClassTimerMinutes Int @default(15)
+  passThresholdPercent Int @default(70)
+  lastSuccessPercent Float?
   
   knowledgePoint   KnowledgePoint @relation(fields: [knowledgePointId], references: [id], onDelete: Cascade)
   teacher          User           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
@@ -177,4 +192,100 @@ enum SlideType {
   example
   exercise
   summary
+}
+
+model Classroom {
+  id        String   @id @default(cuid())
+  name      String
+  teacherId String
+  teacher   User     @relation("ClassroomTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  enrollments ClassEnrollment[]
+  assignments HomeworkAssignment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teacherId, name])
+}
+
+model ClassEnrollment {
+  id         String   @id @default(cuid())
+  classroomId String
+  studentId  String
+  classroom  Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  student    User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([classroomId, studentId])
+}
+
+model HomeworkAssignment {
+  id                 String   @id @default(cuid())
+  title              String
+  description        String?
+  teacherId          String
+  classId            String?
+  knowledgePointId   String
+  dueDate            DateTime
+  exerciseCount      Int      @default(5)
+  subtopics          Json?
+  spacedLearningEnabled Boolean @default(false)
+  teacher            User     @relation("AssignmentCreator", fields: [teacherId], references: [id], onDelete: Cascade)
+  classroom          Classroom? @relation(fields: [classId], references: [id], onDelete: SetNull)
+  knowledgePoint     KnowledgePoint @relation(fields: [knowledgePointId], references: [id], onDelete: Cascade)
+  items              HomeworkAssignmentExercise[]
+  targets            HomeworkAssignmentTarget[]
+  attempts           ExerciseAttempt[]
+  spacedTopics       StudentSpacedTopic[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model HomeworkAssignmentExercise {
+  id            String   @id @default(cuid())
+  assignmentId  String
+  exerciseId    String
+  assignment    HomeworkAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  exercise      Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+
+  @@unique([assignmentId, exerciseId])
+}
+
+model HomeworkAssignmentTarget {
+  id             String   @id @default(cuid())
+  assignmentId   String
+  studentId      String
+  status         AssignmentStatus @default(ASSIGNED)
+  progressPct    Float    @default(0)
+  attemptCount   Int      @default(0)
+  assignedAt     DateTime @default(now())
+  completedAt    DateTime?
+  assignment     HomeworkAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student        User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+}
+
+model StudentSpacedTopic {
+  id                String   @id @default(cuid())
+  studentId         String
+  knowledgePointId  String
+  sourceAssignmentId String?
+  nextDueAt         DateTime @default(now())
+  intervalDays      Int      @default(2)
+  active            Boolean  @default(true)
+  student           User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  knowledgePoint    KnowledgePoint @relation(fields: [knowledgePointId], references: [id], onDelete: Cascade)
+  sourceAssignment  HomeworkAssignment? @relation(fields: [sourceAssignmentId], references: [id], onDelete: SetNull)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([studentId, knowledgePointId])
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
 }

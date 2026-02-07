@@ -62,11 +62,19 @@ export async function POST(req: Request) {
                      llmService.isConfigured('glm');
       
       if (hasLLM) {
-        // Use AI to generate content
-        const provider = llmService.isConfigured('openai') ? 'openai' : 
-                        llmService.isConfigured('google') ? 'google' : 'glm';
-        
-        slides = await generateWithAI(kp, provider);
+        // Use requested provider if configured, otherwise fallback to first available
+        const preferredProvider = provider === 'openai' || provider === 'google' || provider === 'glm'
+          ? provider
+          : null;
+        const selectedProvider = preferredProvider && llmService.isConfigured(preferredProvider)
+          ? preferredProvider
+          : llmService.isConfigured('openai')
+            ? 'openai'
+            : llmService.isConfigured('google')
+              ? 'google'
+              : 'glm';
+
+        slides = await generateWithAI(kp, selectedProvider);
       } else {
         // Fallback to template-based generation
         slides = generateTemplateSlides(kp);
@@ -93,19 +101,21 @@ async function generateWithAI(kp: any, provider: 'openai' | 'google' | 'glm') {
 ARGOMENTO: ${kp.title}
 DESCRIZIONE: ${kp.description}
 
-Crea 5-7 slide con questa struttura:
-1. Titolo e introduzione
-2. Definizione teorica
-3. Esempio guidato (passo dopo passo)
-4. Esempio pratico
-5. Esercizio da risolvere in classe
-6. Errori comuni da evitare
-7. Riepilogo
+Crea 6-8 slide con approccio \"atomizzato\":
+1. Micro-obiettivo della lezione (massimo 2 frasi)
+2. Definizione teorica essenziale
+3. Esempio guidato atomizzato (passi numerati)
+4. Esercizio di esempio risolto
+5. Esercizio da fare in classe sul quaderno (senza soluzione immediata)
+6. Soluzione dell'esercizio precedente (slide separata)
+7. Errori comuni da evitare
+8. Riepilogo e criterio di passaggio fase
 
 Per ogni slide fornisci:
 - type: "content" | "example" | "exercise" | "summary"
 - title: titolo della slide
 - content: contenuto HTML semplice (usa <b>, <i>, <br>, liste)
+- per la slide \"esercizio in classe\" includi un blocco con testo: \"Tempo suggerito: 10 minuti\"
 
 Restituisci SOLO un array JSON in questo formato:
 [
@@ -184,7 +194,7 @@ function generateTemplateSlides(kp: any) {
   return [
     {
       type: 'content',
-      title: `${kp.title}`,
+      title: `${kp.title} - Obiettivo atomico`,
       content: `<h2>Benvenuti alla lezione su ${kp.title}</h2>
 <p>${kp.description}</p>
 <br>
@@ -227,11 +237,24 @@ function generateTemplateSlides(kp: any) {
 <br>
 <p>Risolvi il seguente problema:</p>
 <br>
+<p><b>Tempo suggerito: 10 minuti</b></p>
+<br>
 <div style="background: #f0f5fd; padding: 20px; border-radius: 10px;">
   <p>[Spazio per l'esercizio]</p>
 </div>
 <br>
-<p><i>Discutiamo insieme la soluzione...</i></p>`,
+<p><i>Scrivi sul quaderno e confronta con il compagno.</i></p>`,
+    },
+    {
+      type: 'example',
+      title: 'Soluzione dell\'Esercizio in Classe',
+      content: `<p><b>Correzione guidata:</b></p>
+<ol>
+  <li>Rileggi i dati del problema</li>
+  <li>Scegli la regola corretta</li>
+  <li>Calcola in ordine e verifica</li>
+</ol>
+<p><i>Il docente confronta i passaggi con la classe.</i></p>`,
     },
     {
       type: 'content',

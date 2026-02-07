@@ -16,31 +16,55 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Count total students
-    const totalStudents = await prisma.user.count({
-      where: { role: 'STUDENT' },
-    });
-
-    // Count active lessons
-    const activeLessons = await prisma.lesson.count({
-      where: { teacherId: session.user.id },
-    });
-
-    // Calculate average mastery across all students
-    const progressData = await prisma.userProgress.aggregate({
-      _avg: { masteryLevel: true },
-    });
-
-    // Count lessons created this week
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-    
-    const lessonsThisWeek = await prisma.lesson.count({
-      where: {
-        teacherId: session.user.id,
-        createdAt: { gte: weekAgo },
-      },
-    });
+
+    const [
+      totalStudents,
+      activeLessons,
+      progressData,
+      lessonsThisWeek,
+      totalClasses,
+      activeAssignments,
+      assignmentTargets,
+    ] = await Promise.all([
+      prisma.user.count({
+        where: { role: 'STUDENT' },
+      }),
+      prisma.lesson.count({
+        where: { teacherId: session.user.id },
+      }),
+      prisma.userProgress.aggregate({
+        _avg: { masteryLevel: true },
+      }),
+      prisma.lesson.count({
+        where: {
+          teacherId: session.user.id,
+          createdAt: { gte: weekAgo },
+        },
+      }),
+      prisma.classroom.count({
+        where: { teacherId: session.user.id },
+      }),
+      prisma.homeworkAssignment.count({
+        where: {
+          teacherId: session.user.id,
+          dueDate: { gte: new Date() },
+        },
+      }),
+      prisma.homeworkAssignmentTarget.findMany({
+        where: {
+          assignment: {
+            teacherId: session.user.id,
+          },
+        },
+        select: { progressPct: true },
+      }),
+    ]);
+
+    const avgAssignmentProgress = assignmentTargets.length > 0
+      ? assignmentTargets.reduce((sum, target) => sum + target.progressPct, 0) / assignmentTargets.length
+      : 0;
 
     return NextResponse.json({
       stats: {
@@ -48,6 +72,9 @@ export async function GET() {
         activeLessons,
         avgMastery: Math.round(progressData._avg?.masteryLevel || 0),
         lessonsThisWeek,
+        totalClasses,
+        activeAssignments,
+        avgAssignmentProgress: Math.round(avgAssignmentProgress),
       },
     });
   } catch (error) {

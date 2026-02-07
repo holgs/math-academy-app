@@ -12,7 +12,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { exerciseId, answer, timeSpent } = await req.json();
+    const { exerciseId, answer, timeSpent, assignmentId } = await req.json();
 
     // Get exercise
     const exercise = await prisma.exercise.findUnique({
@@ -22,6 +22,35 @@ export async function POST(req: Request) {
 
     if (!exercise) {
       return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
+    }
+
+    if (assignmentId) {
+      const target = await prisma.homeworkAssignmentTarget.findUnique({
+        where: {
+          assignmentId_studentId: {
+            assignmentId,
+            studentId: session.user.id,
+          },
+        },
+        include: {
+          assignment: {
+            include: {
+              items: {
+                select: { exerciseId: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!target) {
+        return NextResponse.json({ error: 'Assignment target not found' }, { status: 404 });
+      }
+
+      const allowed = target.assignment.items.some((item) => item.exerciseId === exerciseId);
+      if (!allowed) {
+        return NextResponse.json({ error: 'Exercise not part of assignment' }, { status: 400 });
+      }
     }
 
     // Check if correct
@@ -48,6 +77,7 @@ export async function POST(req: Request) {
       data: {
         userId: session.user.id,
         exerciseId,
+        assignmentId: assignmentId || null,
         answer,
         isCorrect,
         xpEarned: xp,
@@ -110,6 +140,55 @@ export async function POST(req: Request) {
         if (newStatus === 'MASTERED') {
           await unlockNextNodes(session.user.id, exercise.knowledgePointId);
         }
+      }
+    }
+
+    if (assignmentId) {
+      const [assignment, assignmentCorrectAttempts, assignmentAttemptsCount] = await Promise.all([
+        prisma.homeworkAssignment.findUnique({
+          where: { id: assignmentId },
+          include: {
+            items: {
+              select: { exerciseId: true },
+            },
+          },
+        }),
+        prisma.exerciseAttempt.findMany({
+          where: {
+            userId: session.user.id,
+            assignmentId,
+            isCorrect: true,
+          },
+          select: { exerciseId: true },
+        }),
+        prisma.exerciseAttempt.count({
+          where: {
+            userId: session.user.id,
+            assignmentId,
+          },
+        }),
+      ]);
+
+      if (assignment) {
+        const uniqueCorrect = new Set(assignmentCorrectAttempts.map((a) => a.exerciseId)).size;
+        const total = assignment.items.length || 1;
+        const progressPct = Math.min(100, (uniqueCorrect / total) * 100);
+        const status = progressPct >= 100 ? 'COMPLETED' : 'IN_PROGRESS';
+
+        await prisma.homeworkAssignmentTarget.update({
+          where: {
+            assignmentId_studentId: {
+              assignmentId,
+              studentId: session.user.id,
+            },
+          },
+          data: {
+            progressPct,
+            attemptCount: assignmentAttemptsCount,
+            status,
+            completedAt: status === 'COMPLETED' ? new Date() : null,
+          },
+        });
       }
     }
 

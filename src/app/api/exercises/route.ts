@@ -13,6 +13,66 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const knowledgePointId = searchParams.get('kp');
+    const assignmentId = searchParams.get('assignmentId');
+
+    if (assignmentId) {
+      const target = await prisma.homeworkAssignmentTarget.findUnique({
+        where: {
+          assignmentId_studentId: {
+            assignmentId,
+            studentId: session.user.id,
+          },
+        },
+        include: {
+          assignment: {
+            include: {
+              items: {
+                include: {
+                  exercise: {
+                    select: {
+                      id: true,
+                      question: true,
+                      difficulty: true,
+                      hint: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!target) {
+        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+
+      const attempts = await prisma.exerciseAttempt.findMany({
+        where: {
+          userId: session.user.id,
+          assignmentId,
+          isCorrect: true,
+        },
+        select: { exerciseId: true },
+      });
+      const attemptedExerciseIds = new Set(attempts.map((a) => a.exerciseId));
+
+      const assignmentExercises = target.assignment.items.map((item) => ({
+        ...item.exercise,
+        completed: attemptedExerciseIds.has(item.exercise.id),
+      }));
+
+      return NextResponse.json({
+        exercises: assignmentExercises,
+        assignment: {
+          id: target.assignment.id,
+          title: target.assignment.title,
+          dueDate: target.assignment.dueDate,
+          status: target.status,
+          progressPct: target.progressPct,
+        },
+      });
+    }
 
     if (!knowledgePointId) {
       return NextResponse.json(
