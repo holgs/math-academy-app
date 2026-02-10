@@ -14,6 +14,7 @@ import {
   BookOpen,
   Play,
   Trash2,
+  Pencil,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -179,6 +180,12 @@ export default function TeacherLessons() {
                     <BookOpen className="w-5 h-5 text-purple-600" />
                   </div>
                   <div className="flex gap-1">
+                    <Link
+                      href={`/teacher/lessons/new?edit=${lesson.id}`}
+                      className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Link>
                     <button 
                       onClick={() => handleDelete(lesson.id)}
                       className="p-2 text-gray-400 hover:text-red-600 transition-colors"

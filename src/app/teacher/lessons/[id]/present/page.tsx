@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { sanitizeHtml } from '@/lib/sanitize-html';
 import KatexContent from '@/components/KatexContent';
 import { 
   ChevronLeft, 
@@ -140,6 +139,14 @@ export default function PresentLesson() {
     return () => clearInterval(interval);
   }, [timerRunning, timerSecondsLeft]);
 
+  useEffect(() => {
+    if (!lesson) return;
+    const activeSlide = lesson.slides[currentSlide];
+    if (activeSlide?.type !== 'exercise') {
+      setTimerRunning(false);
+    }
+  }, [currentSlide, lesson]);
+
   async function saveLessonMetrics() {
     if (!lesson) return;
     const parsed = successPercent.trim() === '' ? null : Number(successPercent);
@@ -195,6 +202,7 @@ export default function PresentLesson() {
   }
 
   const slide = lesson.slides[currentSlide];
+  const isExerciseSlide = slide?.type === 'exercise';
   const progress = ((currentSlide + 1) / lesson.slides.length) * 100;
 
   return (
@@ -278,8 +286,7 @@ export default function PresentLesson() {
             {/* Slide Content */}
             <KatexContent
               className="prose prose-invert prose-lg max-w-none"
-              content={sanitizeHtml(slide.content)}
-              isHtml
+              content={slide.content}
             />
           </motion.div>
         </AnimatePresence>
@@ -296,25 +303,31 @@ export default function PresentLesson() {
             <Timer className="w-3 h-3" />
             Timer esercizi in classe
           </label>
-          <div className="flex items-center justify-between bg-gray-900 rounded px-2 py-1">
-            <span className={`font-mono text-lg ${timerSecondsLeft <= 10 ? 'text-red-400' : 'text-green-400'}`}>
-              {minutes}:{seconds}
-            </span>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setTimerRunning((prev) => !prev)}
-                className="px-2 py-1 rounded bg-gray-700 text-xs"
-              >
-                {timerRunning ? 'Pausa' : 'Start'}
-              </button>
-              <button
-                onClick={resetTimer}
-                className="px-2 py-1 rounded bg-gray-700 text-xs"
-              >
-                Reset
-              </button>
+          {isExerciseSlide ? (
+            <div className="flex items-center justify-between bg-gray-900 rounded px-2 py-1">
+              <span className={`font-mono text-lg ${timerSecondsLeft <= 10 ? 'text-red-400' : 'text-green-400'}`}>
+                {minutes}:{seconds}
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setTimerRunning((prev) => !prev)}
+                  className="px-2 py-1 rounded bg-gray-700 text-xs"
+                >
+                  {timerRunning ? 'Pausa' : 'Start'}
+                </button>
+                <button
+                  onClick={resetTimer}
+                  className="px-2 py-1 rounded bg-gray-700 text-xs"
+                >
+                  Reset
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="text-xs bg-gray-900 rounded px-2 py-2 text-gray-300">
+              Timer attivo solo nelle slide di tipo esercizio.
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">

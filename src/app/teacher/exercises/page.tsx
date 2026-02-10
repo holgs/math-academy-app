@@ -2,18 +2,10 @@
 
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Bot, CheckCircle2, ChevronRight, Pencil, Plus, Save, ShieldCheck, Trash2, Wand2, X } from 'lucide-react';
-
-type KnowledgePoint = {
-  id: string;
-  title: string;
-  description: string;
-  layer: number;
-  prerequisites: string[];
-  hasChildren: boolean;
-};
+import { Bot, Pencil, Save, ShieldCheck, Trash2, Wand2, X } from 'lucide-react';
+import TeacherTopicSelector from '@/components/TeacherTopicSelector';
 
 type Pillar = {
   id: string;
@@ -34,9 +26,8 @@ export default function TeacherExercisesPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  const [path, setPath] = useState<KnowledgePoint[]>([]);
-  const [currentPoints, setCurrentPoints] = useState<KnowledgePoint[]>([]);
   const [selectedKpId, setSelectedKpId] = useState('');
+  const [selectedKpPath, setSelectedKpPath] = useState('');
   const [pillars, setPillars] = useState<Pillar[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [error, setError] = useState('');
@@ -115,7 +106,7 @@ Regole:
       return;
     }
     if (status === 'authenticated') {
-      Promise.all([fetchLevel(), fetchPillars()]).finally(() => setLoading(false));
+      Promise.all([fetchPillars()]).finally(() => setLoading(false));
     }
   }, [status, session, router]);
 
@@ -154,21 +145,6 @@ Regole:
     }
   }, [selectedKpId]);
 
-  async function fetchLevel(parentId?: string) {
-    setError('');
-    try {
-      const url = parentId
-        ? `/api/teacher/knowledge-points?parentId=${encodeURIComponent(parentId)}`
-        : '/api/teacher/knowledge-points';
-      const res = await fetch(url);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Errore caricamento argomenti');
-      setCurrentPoints(data.points || []);
-    } catch (err: any) {
-      setError(err.message || 'Errore rete');
-    }
-  }
-
   async function fetchPillars() {
     try {
       const res = await fetch('/api/teacher/pillars');
@@ -191,23 +167,6 @@ Regole:
     } catch (err: any) {
       setError(err.message || 'Errore rete');
     }
-  }
-
-  function enterPoint(point: KnowledgePoint) {
-    const nextPath = [...path, point];
-    setPath(nextPath);
-    setSelectedKpId(point.id);
-    if (point.hasChildren) {
-      fetchLevel(point.id);
-    }
-  }
-
-  function goToPathIndex(index: number) {
-    const nextPath = path.slice(0, index + 1);
-    setPath(nextPath);
-    const selected = nextPath[nextPath.length - 1];
-    setSelectedKpId(selected?.id || '');
-    fetchLevel(selected?.id);
   }
 
   async function generateExercise() {
@@ -383,8 +342,6 @@ Regole:
     }
   }
 
-  const selectedPathLabel = useMemo(() => path.map((p) => p.title).join(' > '), [path]);
-
   if (status === 'loading' || loading) {
     return <div className="min-h-screen flex items-center justify-center bg-[#E0E5EC]">Caricamento...</div>;
   }
@@ -404,55 +361,23 @@ Regole:
 
         <div className="grid lg:grid-cols-2 gap-4">
           <div className="neu-flat p-4">
-            <h2 className="font-bold text-gray-800 mb-2">Selezione argomento progressiva</h2>
-            <div className="flex flex-wrap gap-2 text-sm mb-3">
-              <button
-                className="neu-button px-2 py-1"
-                onClick={() => {
-                  setPath([]);
-                  setSelectedKpId('');
-                  fetchLevel();
-                }}
-              >
-                Radice
-              </button>
-              {path.map((p, idx) => (
-                <button
-                  key={p.id}
-                  className="neu-button px-2 py-1 flex items-center gap-1"
-                  onClick={() => goToPathIndex(idx)}
-                >
-                  {p.title}
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              ))}
-            </div>
-            {selectedPathLabel && (
-              <p className="text-xs text-gray-500 mb-3 flex items-center gap-2">
-                <CheckCircle2 className="w-3 h-3 text-green-600" />
-                Selezionato: {selectedPathLabel}
-              </p>
+            <TeacherTopicSelector
+              selectedId={selectedKpId}
+              onSelect={(selection) => {
+                setSelectedKpId(selection.id);
+                setSelectedKpPath(selection.pathLabel);
+              }}
+              onClear={() => {
+                setSelectedKpId('');
+                setSelectedKpPath('');
+                setExercises([]);
+              }}
+            />
+            {selectedKpPath && (
+              <div className="text-xs text-gray-500 mt-2">
+                Percorso didattico: {selectedKpPath}
+              </div>
             )}
-            <div className="space-y-2 max-h-72 overflow-auto">
-              {currentPoints.length === 0 && (
-                <div className="text-sm text-gray-500">Nessun sotto-argomento disponibile.</div>
-              )}
-              {currentPoints.map((point) => (
-                <button
-                  key={point.id}
-                  className="neu-button w-full p-3 text-left flex items-center justify-between"
-                  onClick={() => enterPoint(point)}
-                >
-                  <div>
-                    <div className="font-medium text-gray-800">{point.title}</div>
-                    <div className="text-xs text-gray-500">Layer {point.layer + 1}</div>
-                  </div>
-                  <div className="text-xs text-purple-600 text-right">
-                    {selectedKpId === point.id ? 'Argomento attivo' : point.hasChildren ? 'Apri sotto-argomenti' : 'Seleziona'}
-                  </div>
-                </button>
-              ))}
-            </div>
           </div>
 
           <form onSubmit={saveExercise} className="neu-flat p-4 space-y-3">

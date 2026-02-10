@@ -29,6 +29,7 @@ export async function GET(req: Request) {
           description: true,
           layer: true,
           prerequisites: true,
+          interferenceLinks: true,
         },
         orderBy: [{ layer: 'asc' }, { title: 'asc' }],
       });
@@ -53,6 +54,7 @@ export async function GET(req: Request) {
         description: true,
         layer: true,
         prerequisites: true,
+        interferenceLinks: true,
       },
       orderBy: [{ layer: 'asc' }, { title: 'asc' }],
     });

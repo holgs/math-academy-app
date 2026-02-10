@@ -1,8 +1,8 @@
 # PRD - Math Academy App
 
-Versione: 3.1
-Data: 07 Febbraio 2026
-Stato: In implementazione (aggiornato alle funzionalita docente/studente richieste)
+Versione: 3.4
+Data: 09 Febbraio 2026
+Stato: In implementazione (aggiornato a knowledge graph unificato docente/studente)
 
 ## 1. Obiettivo Prodotto
 Math Academy supporta una didattica blended:
@@ -37,6 +37,8 @@ Implementazione:
 - presenter con timer, inserimento percentuale successo e decisione pass/fail (`src/app/teacher/lessons/[id]/present/page.tsx`),
 - salvataggio metriche via `PATCH /api/teacher/lessons/[id]`,
 - export PDF via `GET /api/teacher/lessons/[id]/pdf`.
+- generazione AI con schema JSON rigido (lessonTitle, lessonDescription, slide strutturate),
+- fallback deterministico con contenuto didattico concreto usando esercizi già presenti nel topic (niente placeholder).
 
 ### 2.1.1 Assegnazione esercizi a classe o singolo studente, con scadenza
 Requisito:
@@ -102,7 +104,7 @@ Requisito:
 Implementazione:
 - endpoint `POST /api/teacher/llm/verify` (test connessione e generazione sample),
 - pulsante verifica nella pagina docente esercizi (`src/app/teacher/exercises/page.tsx`),
-- fallback multi-endpoint su GLM per ridurre errori 404.
+- fallback multi-endpoint/model su GLM con diagnostica dettagliata (status + body snippet) per ridurre errori 400/404 e facilitare debug.
 
 ## 4.1 Generazione/Import JSON esercizi (schema + prompt)
 Requisito:
@@ -115,6 +117,7 @@ Implementazione:
   - schema JSON di riferimento,
   - prompt template per LLM,
   - textarea import JSON e salvataggio su argomento selezionato.
+- in `src/app/teacher/lessons/new/page.tsx` è visibile lo schema JSON usato per la generazione lezione.
 
 ## 5. Knowledge Graph a livelli indentati e sblocco progressivo
 Requisito:
@@ -122,9 +125,14 @@ Requisito:
 
 Implementazione:
 - endpoint docente `GET /api/teacher/knowledge-points?mode=flat` con `depth=layer`,
-- endpoint studente `GET /api/knowledge-graph?mode=progressive` con apertura progressiva,
-- componente mappa aggiornato con drill-down generale->particolare,
+- endpoint studente `GET /api/knowledge-graph?mode=flat` per rendering ad albero completo,
+- componente mappa studente aggiornato con UX ad albero stile viewer (ricerca + anno + categoria + topic),
 - dettaglio nodo con teoria/suggerimenti/esempi/esercizi importati.
+- selettore docente riusabile (`src/components/TeacherTopicSelector.tsx`) allineato alla stessa UX della mappa studente:
+  - sidebar con ricerca,
+  - albero espandibile anno/categoria/topic,
+  - pannello dettaglio con prerequisiti, topic sbloccati, interferenze.
+- utilita tassonomica condivisa (`src/lib/knowledge-graph-tree.ts`) usata sia da docente sia da studente per costruzione albero e path.
 
 ## 5.1 Rendering formule matematiche
 Requisito:
@@ -151,6 +159,23 @@ Estensioni:
 - `ExerciseAttempt`: collegamento opzionale ad assignment.
 - `KnowledgePoint`: `theoryContent`, `tipsContent`, `examplesContent`.
 
+### 6.1 Modello Knowledge Graph raccomandato (corretto)
+Problema osservato:
+- con dataset molto "piatto" (molti nodi root o prerequisiti non gerarchici), la sola coppia `layer + prerequisites[]` non garantisce una UX stabile per selezione "principale -> sotto -> sotto-sotto".
+
+Indicazione progettuale:
+- mantenere `prerequisites[]` per le dipendenze didattiche,
+- aggiungere anche una struttura tassonomica esplicita (consigliato) per la navigazione UI:
+  - `parentId` (albero di navigazione),
+  - `sortOrder` (ordine locale),
+  - `taxonomyPath` (es. `Numeri/Frazioni/Somma frazioni`).
+
+Nota:
+- dipendenze (grafo) e tassonomia (albero) devono restare separate: un nodo puo avere `parentId` unico ma piu prerequisiti.
+- stato corrente implementato: costruzione UI macro-argomento -> sotto-argomenti con grouping coerente per id/titolo topic.
+- l'intestazione anni in UI e stata normalizzata a 5 cicli scolastici fissi: `1°`, `2°`, `3°`, `4°`, `5°`.
+- passo successivo consigliato: persistenza DB di `taxonomyPath/parentId/sortOrder` per stabilizzare ulteriormente il clustering su dataset estesi.
+
 ## 7. Stato Funzionale
 Implementato in questa release:
 - classi + CSV,
@@ -158,11 +183,14 @@ Implementato in questa release:
 - spaced learning automatico su assignment,
 - dashboard studente con compiti, profilo e log,
 - export PDF lezione,
-- controllo timer e percentuale successo in presentazione LIM,
+- controllo timer e percentuale successo in presentazione LIM (timer attivo solo su slide `exercise`),
 - verifica provider LLM lato docente,
 - import JSON guidato (prompt + schema) in area esercizi docente,
 - rendering KaTeX esteso nelle viste didattiche,
 - knowledge graph progressivo con dettaglio contenuti importati,
+- knowledge graph docente/studente unificato con stessa UX ad albero (ricerca + espansione + dettaglio prerequisiti/sblocchi/interferenze),
+- raggruppamento macro/sotto-argomenti con 5 tab anno standard (`1°..5°`) per coerenza didattica verticale,
+- generazione lezione AI robusta con normalizzazione anti-placeholder (evita slide vuote/scheletro),
 - aggiornamento PRD e schema dati.
 
 A completamento successivo (roadmap):

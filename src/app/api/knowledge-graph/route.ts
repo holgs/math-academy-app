@@ -23,6 +23,7 @@ export async function GET(req: Request) {
         description: true,
         layer: true,
         prerequisites: true,
+        interferenceLinks: true,
       },
     });
 
@@ -63,8 +64,25 @@ export async function GET(req: Request) {
             description: kp.description,
             layer: kp.layer,
             prerequisites: kp.prerequisites,
+            interferenceLinks: Array.isArray(kp.interferenceLinks) ? kp.interferenceLinks : [],
             status: progressMap.get(kp.id) || 'LOCKED',
             hasChildren: childrenSet.has(kp.id),
+          }))
+          .sort((a, b) => a.layer - b.layer || a.title.localeCompare(b.title)),
+      });
+    }
+
+    if (mode === 'flat') {
+      return NextResponse.json({
+        points: knowledgePoints
+          .map((kp) => ({
+            id: kp.id,
+            title: kp.title,
+            description: kp.description,
+            layer: kp.layer,
+            prerequisites: kp.prerequisites,
+            interferenceLinks: Array.isArray(kp.interferenceLinks) ? kp.interferenceLinks : [],
+            status: progressMap.get(kp.id) || 'LOCKED',
           }))
           .sort((a, b) => a.layer - b.layer || a.title.localeCompare(b.title)),
       });

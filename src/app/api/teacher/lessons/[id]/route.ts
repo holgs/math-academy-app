@@ -2,6 +2,20 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { NextResponse } from 'next/server';
+import { sanitizeHtml } from '@/lib/sanitize-html';
+
+const VALID_SLIDE_TYPES = new Set(['content', 'example', 'exercise', 'summary']);
+
+function normalizeSlideType(type: unknown): 'content' | 'example' | 'exercise' | 'summary' {
+  if (typeof type !== 'string') {
+    return 'content';
+  }
+  const normalized = type.toLowerCase().trim();
+  if (VALID_SLIDE_TYPES.has(normalized)) {
+    return normalized as 'content' | 'example' | 'exercise' | 'summary';
+  }
+  return 'content';
+}
 
 async function requireTeacherOrAdmin() {
   const session = await getServerSession(authOptions) as { user: { id: string; role: string } } | null;
@@ -55,7 +69,7 @@ export async function GET(
   }
 }
 
-// PATCH /api/teacher/lessons/[id] - Update lesson class metrics (timer/success/threshold)
+// PATCH /api/teacher/lessons/[id] - Update lesson (metrics and optional full content)
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
@@ -79,13 +93,76 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { inClassTimerMinutes, passThresholdPercent, lastSuccessPercent } = await request.json();
+    const {
+      title,
+      description,
+      knowledgePointId,
+      slides,
+      inClassTimerMinutes,
+      passThresholdPercent,
+      lastSuccessPercent,
+    } = await request.json();
 
     const data: {
+      title?: string;
+      description?: string;
+      knowledgePointId?: string;
       inClassTimerMinutes?: number;
       passThresholdPercent?: number;
       lastSuccessPercent?: number | null;
+      slides?: {
+        deleteMany: Record<string, never>;
+        create: Array<{
+          type: 'content' | 'example' | 'exercise' | 'summary';
+          title: string;
+          content: string;
+          order: number;
+        }>;
+      };
     } = {};
+
+    if (title !== undefined) {
+      const value = String(title).trim();
+      if (!value) {
+        return NextResponse.json({ error: 'Titolo non valido' }, { status: 400 });
+      }
+      data.title = value.slice(0, 200);
+    }
+
+    if (description !== undefined) {
+      data.description = String(description || '');
+    }
+
+    if (knowledgePointId !== undefined) {
+      const kpId = String(knowledgePointId || '').trim();
+      if (!kpId) {
+        return NextResponse.json({ error: 'knowledgePointId non valido' }, { status: 400 });
+      }
+      const kp = await prisma.knowledgePoint.findUnique({
+        where: { id: kpId },
+        select: { id: true },
+      });
+      if (!kp) {
+        return NextResponse.json({ error: 'Knowledge point not found' }, { status: 404 });
+      }
+      data.knowledgePointId = kpId;
+    }
+
+    if (slides !== undefined) {
+      if (!Array.isArray(slides) || slides.length === 0) {
+        return NextResponse.json({ error: 'Slides non valide' }, { status: 400 });
+      }
+      const preparedSlides = slides.map((slide: any, index: number) => ({
+        type: normalizeSlideType(slide?.type),
+        title: String(slide?.title || `Slide ${index + 1}`).slice(0, 200),
+        content: sanitizeHtml(String(slide?.content || '')),
+        order: index,
+      }));
+      data.slides = {
+        deleteMany: {},
+        create: preparedSlides,
+      };
+    }
 
     if (inClassTimerMinutes !== undefined) {
       const parsed = Number(inClassTimerMinutes);
@@ -120,9 +197,22 @@ export async function PATCH(
       data,
       select: {
         id: true,
+        title: true,
+        description: true,
+        knowledgePointId: true,
         inClassTimerMinutes: true,
         passThresholdPercent: true,
         lastSuccessPercent: true,
+        slides: {
+          orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            type: true,
+            title: true,
+            content: true,
+            order: true,
+          },
+        },
       },
     });
 
