@@ -34,42 +34,32 @@ export async function POST(req: Request) {
     });
 
     const startedAt = Date.now();
-
-    const generated = await llmService.generateExercise(
-      {
-        id: 'verify.kp',
-        title: 'Addizione di numeri interi',
-        description: 'Somme e differenze con numeri interi',
-        layer: 0,
-        prerequisites: [],
-        commonMistakes: [],
-        realWorldApplications: [],
-        tips: [],
-      },
-      provider,
-      1
-    );
+    const verified = await llmService.verifyConnection(provider);
 
     const elapsedMs = Date.now() - startedAt;
+    const effectiveConfig = llmService.getConfig(provider);
 
     return NextResponse.json({
       ok: true,
       provider,
       elapsedMs,
-      sample: {
-        question: generated.question,
-        answer: generated.answer,
-        hint: generated.hint,
-        difficulty: generated.difficulty,
-        pillarReference: generated.pillarReference || null,
-      },
+      model: effectiveConfig?.model || null,
+      probe: verified.probe || null,
     });
   } catch (error: any) {
     console.error('LLM verify error:', error);
+    const message = String(error?.message || 'Verifica LLM fallita');
+    const normalized = message.toLowerCase();
+    const mappedError = normalized.includes('code 1113') || normalized.includes('credito esaurito')
+      ? 'Connessione GLM riuscita, ma credito insufficiente (code 1113). Ricarica il piano oppure usa OpenAI/Google.'
+      : normalized.includes('code 1211') || normalized.includes('modello non disponibile')
+        ? 'Modello GLM non disponibile per questa API key (code 1211). Prova un modello supportato dal tuo account.'
+        : message;
+
     return NextResponse.json(
       {
         ok: false,
-        error: error?.message || 'Verifica LLM fallita',
+        error: mappedError,
       },
       { status: 500 }
     );

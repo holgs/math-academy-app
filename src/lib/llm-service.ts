@@ -16,6 +16,21 @@ const DEFAULT_MODELS: Record<LLMProvider, string> = {
   glm: 'glm-4.7',
 };
 
+const GLM_ENDPOINTS = [
+  {
+    url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    models: ['glm-4-flash', 'glm-4-plus', 'glm-4-air'],
+  },
+  {
+    url: 'https://api.z.ai/api/paas/v4/chat/completions',
+    models: ['glm-4.5-flash', 'glm-4.5', DEFAULT_MODELS.glm],
+  },
+  {
+    url: 'https://api.z.ai/v1/chat/completions',
+    models: ['glm-4.5-flash', DEFAULT_MODELS.glm],
+  },
+] as const;
+
 // Structure for exercise generation
 export interface ExerciseTemplate {
   question: string;
@@ -80,6 +95,40 @@ class LLMService {
 
   getConfig(provider: LLMProvider): LLMConfig | undefined {
     return this.configs.get(provider);
+  }
+
+  async verifyConnection(provider: LLMProvider): Promise<{ probe: string }> {
+    const config = this.configs.get(provider);
+    if (!config) {
+      throw new Error(`Provider ${provider} not configured`);
+    }
+
+    if (provider === 'openai') {
+      if (!this.openaiClient) {
+        throw new Error('OpenAI client not initialized');
+      }
+      const response = await this.openaiClient.chat.completions.create({
+        model: config.model || DEFAULT_MODELS.openai,
+        messages: [{ role: 'user', content: 'Rispondi solo con: OK' }],
+        max_tokens: 8,
+        temperature: 0,
+      });
+      return { probe: response.choices[0]?.message?.content?.trim() || '' };
+    }
+
+    if (provider === 'google') {
+      if (!this.googleModel) {
+        throw new Error('Google client not initialized');
+      }
+      const result = await this.googleModel.generateContent('Rispondi solo con: OK');
+      return { probe: result.response.text().trim() };
+    }
+
+    const probe = await this.generateWithGLMRaw('Rispondi solo con: OK', config, {
+      temperature: 0,
+      maxTokens: 16,
+    });
+    return { probe: String(probe).trim() };
   }
 
   async generateExercise(
@@ -192,54 +241,113 @@ Genera l'esercizio ora:`;
   }
 
   private async generateWithGLM(prompt: string, config: LLMConfig): Promise<ExerciseTemplate> {
-    const endpoints = [
-      {
-        url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
-        defaultModel: 'glm-4-flash',
-      },
-      {
-        url: 'https://api.z.ai/v1/chat/completions',
-        defaultModel: DEFAULT_MODELS.glm,
-      },
-    ];
+    const content = await this.generateWithGLMRaw(prompt, config, {
+      systemMessage: 'Sei un generatore di esercizi matematici. Rispondi in italiano con JSON valido.',
+      temperature: 0.7,
+      maxTokens: 1000,
+    });
+    return this.parseExerciseResponse(content);
+  }
 
+  private buildGlmModelCandidates(config: LLMConfig, endpointModels: readonly string[]) {
+    const models = new Set<string>();
+    if (config.model && config.model.trim()) {
+      models.add(config.model.trim());
+    }
+    endpointModels.forEach((model) => models.add(model));
+    return Array.from(models);
+  }
+
+  private static errorSnippet(raw: string, max = 160) {
+    const compact = raw.replace(/\s+/g, ' ').trim();
+    if (!compact) return 'no-body';
+    return compact.length > max ? `${compact.slice(0, max)}...` : compact;
+  }
+
+  private static extractChatContent(data: any): string {
+    const content = data?.choices?.[0]?.message?.content;
+    if (typeof content === 'string' && content.trim()) {
+      return content;
+    }
+    if (Array.isArray(content)) {
+      const text = content
+        .map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
+        .join('')
+        .trim();
+      if (text) return text;
+    }
+    if (typeof data?.output_text === 'string' && data.output_text.trim()) {
+      return data.output_text;
+    }
+    return '';
+  }
+
+  private async generateWithGLMRaw(
+    prompt: string,
+    config: LLMConfig,
+    options?: {
+      systemMessage?: string;
+      temperature?: number;
+      maxTokens?: number;
+    }
+  ): Promise<string> {
     const errors: string[] = [];
+    let sawInsufficientBalance = false;
+    let sawInvalidModel = false;
 
-    for (const endpoint of endpoints) {
-      try {
-        const response = await fetch(endpoint.url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: config.model || endpoint.defaultModel,
-            messages: [
-              { role: 'system', content: 'Sei un generatore di esercizi matematici. Rispondi in italiano con JSON valido.' },
-              { role: 'user', content: prompt }
-            ],
-            temperature: 0.7,
-            max_tokens: 1000,
-          }),
-        });
+    for (const endpoint of GLM_ENDPOINTS) {
+      const models = this.buildGlmModelCandidates(config, endpoint.models);
+      for (const model of models) {
+        try {
+          const response = await fetch(endpoint.url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${config.apiKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                ...(options?.systemMessage ? [{ role: 'system', content: options.systemMessage }] : []),
+                { role: 'user', content: prompt },
+              ],
+              temperature: options?.temperature ?? 0.7,
+              max_tokens: options?.maxTokens ?? 1000,
+            }),
+          });
 
-        if (!response.ok) {
-          errors.push(`${endpoint.url} -> ${response.status}`);
-          continue;
+          if (!response.ok) {
+            const body = await response.text();
+            if (response.status === 429 || body.includes('"code":"1113"')) {
+              sawInsufficientBalance = true;
+            }
+            if (response.status === 400 && body.includes('"code":"1211"')) {
+              sawInvalidModel = true;
+            }
+            errors.push(`${endpoint.url} [${model}] -> ${response.status} (${LLMService.errorSnippet(body)})`);
+            continue;
+          }
+
+          const data = await response.json();
+          const content = LLMService.extractChatContent(data);
+          if (content) {
+            return content;
+          }
+
+          errors.push(`${endpoint.url} [${model}] -> empty response`);
+        } catch (error: any) {
+          errors.push(`${endpoint.url} [${model}] -> ${error?.message || 'network error'}`);
         }
-
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (!content) {
-          errors.push(`${endpoint.url} -> empty response`);
-          continue;
-        }
-
-        return this.parseExerciseResponse(content);
-      } catch (error: any) {
-        errors.push(`${endpoint.url} -> ${error?.message || 'network error'}`);
       }
+    }
+
+    if (sawInsufficientBalance) {
+      throw new Error(
+        'GLM API: connessione riuscita ma credito esaurito (code 1113). Ricarica il piano GLM oppure usa OpenAI/Google.'
+      );
+    }
+    if (sawInvalidModel) {
+      throw new Error('GLM API: modello non disponibile per questa chiave (code 1211).');
     }
 
     throw new Error(`GLM API error: ${errors.join(' | ')}`);
@@ -301,44 +409,11 @@ Restituisci SOLO JSON:
       const result = await this.googleModel!.generateContent(prompt);
       content = result.response.text();
     } else {
-      const endpoints = [
-        { url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'glm-4-flash' },
-        { url: 'https://api.z.ai/v1/chat/completions', model: DEFAULT_MODELS.glm },
-      ];
-
-      let lastError = 'Unknown GLM error';
-      content = '';
-      for (const endpoint of endpoints) {
-        try {
-          const response = await fetch(endpoint.url, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${config.apiKey}`,
-            },
-            body: JSON.stringify({
-              model: config.model || endpoint.model,
-              messages: [{ role: 'user', content: prompt }],
-            }),
-          });
-          if (!response.ok) {
-            lastError = `${endpoint.url} -> ${response.status}`;
-            continue;
-          }
-          const data = await response.json();
-          content = data.choices?.[0]?.message?.content || '';
-          if (content) {
-            break;
-          }
-          lastError = `${endpoint.url} -> empty response`;
-        } catch (error: any) {
-          lastError = error?.message || 'network error';
-        }
-      }
-
-      if (!content) {
-        throw new Error(lastError);
-      }
+      content = await this.generateWithGLMRaw(prompt, config, {
+        systemMessage: 'Sei un tutor di matematica. Rispondi in italiano con JSON valido.',
+        temperature: 0.7,
+        maxTokens: 800,
+      });
     }
 
     const jsonMatch = content.match(/\{[\s\S]*\}/);
